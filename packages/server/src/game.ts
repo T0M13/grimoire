@@ -4,7 +4,10 @@ import {
   type Character, type CheckRequest, type ClientMessage, type PublicState,
   type ServerMessage,
 } from "@grimoire/shared";
-import { PREGEN_CHARACTERS, resolveCheck, seededRng, type Rng } from "@grimoire/rules";
+import {
+  buildLevelThreeCharacter, classRulesById, resolveCheck, seededRng,
+  validateCharacterChoices, type Rng,
+} from "@grimoire/rules";
 import { decideMove, narrate } from "./dm.js";
 import { generatePortrait, getSceneImage, SentenceStream, synthesize } from "./media.js";
 import { deleteSlot, listSaves, loadCampaign, loadSlot, logEvent, saveCampaign, saveSlot } from "./db.js";
@@ -14,7 +17,8 @@ import { IdleShutdown } from "./lifecycle.js";
 const OPENING_INSTRUCTION = (premise: string, party: string) =>
   `ENGINE: Begin a brand-new adventure for this party: ${party}.
 Premise wish from the players: "${premise || "surprise us"}".
-Your move MUST be "change_scene" - invent an evocative opening location where the adventure hooks the party immediately.`;
+Your move MUST be "change_scene" - invent an evocative opening location where the adventure hooks the party immediately.
+The scene image must visibly include the location and the NPC, creature, or event delivering that hook.`;
 
 function defaultState(): PublicState {
   return {
@@ -144,15 +148,17 @@ export class GameRoom {
 
   private onJoin(ws: WebSocket, msg: Extract<ClientMessage, { type: "join" }>): void {
     const name = msg.playerName.trim();
-    this.clients.set(ws, name);
     const existing = this.state.party.find(c => c.name.toLowerCase() === name.toLowerCase());
     if (!existing) {
-      // stats come from the class template ONLY - bio/looks are flavor and can't buff you
-      const pregen = PREGEN_CHARACTERS.find(c => c.id === msg.characterId) ?? PREGEN_CHARACTERS[0]!;
+      // Mechanics come only from validated SRD choices; bio/looks remain flavor.
+      const rules = classRulesById(msg.characterId) ?? classRulesById("fighter")!;
+      const abilities = msg.abilities ?? rules.recommendedAbilities;
+      const proficientSkills = msg.proficientSkills ?? [...rules.recommendedSkills];
+      const validationError = validateCharacterChoices(rules, abilities, proficientSkills);
+      if (validationError) return this.send(ws, { type: "error", message: validationError });
+      const base = buildLevelThreeCharacter(crypto.randomUUID(), name, rules, abilities, proficientSkills);
       const character: Character = structuredClone({
-        ...pregen,
-        id: crypto.randomUUID(),
-        name,
+        ...base,
         sex: msg.sex,
         age: msg.age,
         bio: msg.bio,
@@ -177,6 +183,7 @@ export class GameRoom {
           .catch(err => console.warn("[portrait failed]", (err as Error).message));
       }
     }
+    this.clients.set(ws, name);
     this.persist();
     this.broadcastState();
   }
@@ -212,7 +219,7 @@ export class GameRoom {
         instruction = `ENGINE: ${move.item.playerName} obtains: ${move.item.item}. Weave it into the narration naturally (1-2 sentences).`;
       }
 
-      const narration = await this.narrateAndSpeak(instruction);
+      const narration = await this.narrateAndSpeak(instruction, player);
       if (move.move === "change_scene") this.state.scene.description = narration.slice(0, 500);
       if (move.move === "request_check" && move.check) this.broadcast({ type: "roll_request", check: move.check });
     } catch (err) {
@@ -246,6 +253,7 @@ export class GameRoom {
     try {
       await this.narrateAndSpeak(
         "ENGINE: Narrate what happens given that mechanical result (2-4 sentences). Honor it exactly - do not soften a failure or cheapen a success. A natural 20/1 deserves extra drama.",
+        player,
       );
     } catch (err) {
       this.broadcast({ type: "error", message: "The storyteller lost the thread. Try again." });
@@ -285,7 +293,8 @@ export class GameRoom {
             },
       );
       const narration = await this.narrateAndSpeak(
-        `ENGINE: Open the adventure. Establish where the party is and why they are together, ending on an immediate hook (3-5 sentences).`,
+        `ENGINE: Open the adventure. Establish where you are and why the adventure starts here, ending on an immediate hook (3-5 sentences). Never describe a solo player as traveling with their own character.`,
+        party.length === 1 ? party[0]!.name : undefined,
       );
       this.state.scene.description = narration.slice(0, 500);
       this.state.campaignName = this.state.scene.name;
@@ -301,13 +310,13 @@ export class GameRoom {
   // ---------- shared plumbing ----------
 
   /** Streamed narration + sentence-streamed voice. Returns the full text. */
-  private async narrateAndSpeak(instruction: string): Promise<string> {
+  private async narrateAndSpeak(instruction: string, viewpointName?: string): Promise<string> {
     this.broadcast({ type: "narration_start", speaker: "dm" });
     const sentences = new SentenceStream(s => this.queueAudio(s));
     const full = await narrate(this.state, this.history, instruction, chunk => {
       this.broadcast({ type: "narration_chunk", text: chunk });
       sentences.push(chunk);
-    });
+    }, viewpointName);
     sentences.flush();
     this.broadcast({ type: "narration_end" });
     this.history.push({ role: "assistant", content: full });

@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { SKILL_ABILITY, ABILITIES, type Ability, type Character } from "@grimoire/shared";
+import {
+  CLASS_BUILD_RULES, POINT_BUY_BUDGET, POINT_BUY_COST, STANDARD_ARRAY,
+  classRulesById, pointBuySpent,
+} from "@grimoire/rules";
+import {
+  SKILL_ABILITY, SKILLS, ABILITIES,
+  type Ability, type AbilityScores, type Character, type Skill,
+} from "@grimoire/shared";
 import { assetUrl, useGame } from "./useGame";
 
 const mod = (score: number) => Math.floor((score - 10) / 2);
@@ -34,6 +41,8 @@ interface JoinPayload {
   age: "young" | "adult" | "elder";
   bio: string;
   portraitUrl: string | null;
+  abilities: AbilityScores;
+  proficientSkills: Skill[];
 }
 
 const RANDOM_NAMES = {
@@ -43,21 +52,56 @@ const RANDOM_NAMES = {
 const RANDOM_LOOKS = ["black hair, gray eyes, wiry build", "auburn hair, green eyes, broad shoulders", "silver-streaked hair, dark eyes, weathered hands", "blond hair, blue eyes, quick smile", "shaved head, brown eyes, old burn scar", "braided dark hair, amber eyes, lean and quiet"];
 const RANDOM_PASTS = ["former caravan guard who saw something in the mountains", "ran away from a temple upbringing", "last survivor of a fishing village", "ex-soldier who deserted a losing war", "raised by smugglers, still owes them money", "disgraced noble hiding a family secret", "woke in a field two winters ago with no memory before that"];
 const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)]!;
+const shuffled = <T,>(values: readonly T[]): T[] => [...values].sort(() => Math.random() - 0.5);
+
+function randomAbilityScores(): AbilityScores {
+  const scores = shuffled(STANDARD_ARRAY);
+  return Object.fromEntries(ABILITIES.map((ability, index) => [ability, scores[index]!])) as AbilityScores;
+}
 
 function JoinScreen({ onJoin, connected }: { onJoin: (p: JoinPayload) => void; connected: boolean }) {
   const [name, setName] = useState("");
-  const [cls, setCls] = useState<string>("fighter");
+  const [cls, setCls] = useState<(typeof CLASSES)[number]["id"]>("fighter");
   const [sex, setSex] = useState<"male" | "female">("male");
   const [age, setAge] = useState<"young" | "adult" | "elder">("adult");
   const [desc, setDesc] = useState("");
+  const [abilities, setAbilities] = useState<AbilityScores>(() => ({ ...CLASS_BUILD_RULES.Fighter.recommendedAbilities }));
+  const [skills, setSkills] = useState<Skill[]>(() => [...CLASS_BUILD_RULES.Fighter.recommendedSkills]);
+  const rules = classRulesById(cls)!;
+  const pointsRemaining = POINT_BUY_BUDGET - pointBuySpent(abilities);
+  const valid = pointsRemaining === 0 && skills.length === rules.skillCount;
+
+  const chooseClass = (id: (typeof CLASSES)[number]["id"]) => {
+    const next = classRulesById(id)!;
+    setCls(id);
+    setAbilities({ ...next.recommendedAbilities });
+    setSkills([...next.recommendedSkills]);
+  };
+
+  const adjustAbility = (ability: Ability, change: -1 | 1) => {
+    const nextScore = abilities[ability] + change;
+    if (nextScore < 8 || nextScore > 15) return;
+    const next = { ...abilities, [ability]: nextScore };
+    if (pointBuySpent(next) <= POINT_BUY_BUDGET) setAbilities(next);
+  };
+
+  const toggleSkill = (skill: Skill) => {
+    setSkills(current => current.includes(skill)
+      ? current.filter(item => item !== skill)
+      : current.length < rules.skillCount ? [...current, skill] : current);
+  };
 
   const randomize = () => {
     const s = pick(["male", "female"] as const);
+    const selected = pick(CLASSES);
+    const selectedRules = classRulesById(selected.id)!;
     setSex(s);
     setAge(pick(["young", "adult", "elder"] as const));
-    setCls(pick(CLASSES).id);
+    setCls(selected.id);
     setName(pick(RANDOM_NAMES[s]));
     setDesc(`${pick(RANDOM_LOOKS)}; ${pick(RANDOM_PASTS)}`);
+    setAbilities(randomAbilityScores());
+    setSkills(shuffled(selectedRules.skillChoices).slice(0, selectedRules.skillCount));
   };
 
   const Pick = <T extends string>({ value, options, set }: { value: T; options: readonly T[]; set: (v: T) => void }) => (
@@ -72,22 +116,25 @@ function JoinScreen({ onJoin, connected }: { onJoin: (p: JoinPayload) => void; c
   );
 
   return (
-    <div className="h-screen w-screen overflow-y-auto flex items-center justify-center">
+    <div className="min-h-screen w-screen overflow-y-auto flex items-center justify-center">
       <form
-        className="fadein w-full max-w-sm px-6 py-8"
+        className="fadein w-full max-w-2xl px-6 py-8"
         onSubmit={e => {
           e.preventDefault();
-          if (name.trim() && connected)
-            onJoin({ playerName: name.trim(), characterId: cls, sex, age, bio: desc.trim(), portraitUrl: null });
+          if (name.trim() && connected && valid)
+            onJoin({
+              playerName: name.trim(), characterId: cls, sex, age, bio: desc.trim(), portraitUrl: null,
+              abilities, proficientSkills: skills,
+            });
         }}>
 
         <div className="w-full">
           <h1 className="narration text-5xl text-amber-100/90 tracking-wide text-center mb-1">Grimoire</h1>
-          <p className="text-sm text-stone-400 text-center mb-6">an adventure told to you</p>
+          <p className="text-sm text-stone-400 text-center mb-6">An Adventure Told to You</p>
 
           <button type="button" onClick={randomize}
             className="w-full rounded-xl border border-stone-700 text-stone-400 hover:border-amber-600/60 hover:text-amber-200 py-2 text-sm transition mb-3">
-            Randomize everything
+            Randomize Everything
           </button>
 
           <input
@@ -101,12 +148,59 @@ function JoinScreen({ onJoin, connected }: { onJoin: (p: JoinPayload) => void; c
 
           <div className="grid grid-cols-2 gap-2 mb-3">
             {CLASSES.map(c => (
-              <button type="button" key={c.id} onClick={() => setCls(c.id)}
+              <button type="button" key={c.id} onClick={() => chooseClass(c.id)}
                 className={`text-left rounded-xl border px-3 py-2 transition ${cls === c.id ? "border-amber-500/80 bg-amber-950/40" : "border-stone-700 bg-stone-900/60 hover:border-stone-500"}`}>
                 <div className={`text-sm font-medium ${cls === c.id ? "text-amber-200" : "text-stone-300"}`}>{c.label}</div>
-                <div className="text-[11px] text-stone-500 mt-0.5 leading-tight">{c.blurb}</div>
+                <div className="text-[11px] text-stone-500 mt-0.5 leading-tight normal-case">{c.blurb}</div>
               </button>
             ))}
+          </div>
+
+          <div className="flex items-end justify-between mt-5 mb-2">
+            <div>
+              <div className="text-sm font-medium text-stone-200">Ability Scores</div>
+              <div className="text-[11px] text-stone-500">SRD 27-Point Buy · Scores 8–15</div>
+            </div>
+            <div className={`text-sm ${pointsRemaining === 0 ? "text-emerald-300" : "text-amber-300"}`}>
+              {pointsRemaining} Points Remaining
+            </div>
+          </div>
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-5">
+            {ABILITIES.map(ability => (
+              <div key={ability} className="rounded-xl border border-stone-700 bg-stone-900/70 p-2 text-center">
+                <div className="text-[10px] tracking-widest text-stone-500">{ability}</div>
+                <div className="text-xl text-stone-100">{abilities[ability]}</div>
+                <div className="text-xs text-amber-200/80 mb-1">{fmtMod(mod(abilities[ability]))}</div>
+                <div className="flex justify-center gap-1">
+                  <button type="button" aria-label={`Lower ${ability}`} onClick={() => adjustAbility(ability, -1)}
+                    disabled={abilities[ability] <= 8}
+                    className="w-7 rounded border border-stone-700 disabled:opacity-25 hover:border-amber-500/60">−</button>
+                  <button type="button" aria-label={`Raise ${ability}`} onClick={() => adjustAbility(ability, 1)}
+                    disabled={abilities[ability] >= 15 || (POINT_BUY_COST[abilities[ability] + 1]! - POINT_BUY_COST[abilities[ability]]!) > pointsRemaining}
+                    className="w-7 rounded border border-stone-700 disabled:opacity-25 hover:border-amber-500/60">+</button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm font-medium text-stone-200">Skill Proficiencies</div>
+            <div className={`text-xs ${skills.length === rules.skillCount ? "text-emerald-300" : "text-amber-300"}`}>
+              Choose {rules.skillCount} · {skills.length}/{rules.skillCount}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-1.5 mb-5">
+            {rules.skillChoices.map(skill => (
+              <button type="button" key={skill} aria-pressed={skills.includes(skill)} onClick={() => toggleSkill(skill)}
+                className={`rounded-full border px-2.5 py-1 text-xs transition ${skills.includes(skill) ? "border-amber-500/80 bg-amber-950/50 text-amber-200" : "border-stone-700 text-stone-400 hover:border-stone-500"}`}>
+                {skill}
+              </button>
+            ))}
+          </div>
+
+          <div className="rounded-xl border border-stone-800 bg-stone-900/50 px-3 py-2 mb-3">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">Starter Equipment</div>
+            <div className="text-xs text-stone-300 capitalize">{rules.starterEquipment.join(" · ")}</div>
           </div>
 
           <textarea
@@ -115,9 +209,9 @@ function JoinScreen({ onJoin, connected }: { onJoin: (p: JoinPayload) => void; c
             className="w-full bg-stone-900/80 border border-stone-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-amber-600/60 mb-3 resize-none"
           />
 
-          <button type="submit" disabled={!name.trim() || !connected}
+          <button type="submit" disabled={!name.trim() || !connected || !valid}
             className="w-full rounded-xl bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed py-3 text-lg font-medium transition">
-            {connected ? "Begin the adventure" : "Connecting..."}
+            {connected ? "Begin the Adventure" : "Connecting..."}
           </button>
         </div>
       </form>
@@ -166,14 +260,14 @@ function GameScreen({ game, myName }: { game: ReturnType<typeof useGame>; myName
           {(game.audio.speaking || game.audio.paused) && !game.audio.muted && (
             <button onClick={game.audio.togglePause}
               className="px-2.5 py-1 rounded-full border border-stone-600/60 bg-black/40 text-xs hover:border-amber-500/60">
-              {game.audio.paused ? "resume" : "pause"}
+              {game.audio.paused ? "Resume" : "Pause"}
             </button>
           )}
           <button onClick={() => setSheetFor(state.party.find(c => c.name.toLowerCase() === myName.toLowerCase())?.id ?? null)}
             className="px-2.5 py-1 rounded-full border border-stone-600/60 bg-black/40 text-xs hover:border-amber-500/60">
-            sheet
+            Sheet
           </button>
-          <button onClick={() => setSettingsOpen(true)} title="settings" aria-label="settings"
+          <button onClick={() => setSettingsOpen(true)} title="Settings" aria-label="Settings"
             className="p-1.5 rounded-full border border-stone-600/60 bg-black/40 hover:border-amber-500/60">
             <GearIcon />
           </button>
@@ -202,7 +296,7 @@ function GameScreen({ game, myName }: { game: ReturnType<typeof useGame>; myName
               d20 {game.lastRoll.die}{game.lastRoll.modifier >= 0 ? ` + ${game.lastRoll.modifier}` : ` − ${-game.lastRoll.modifier}`} · {game.lastRoll.skill} DC {game.lastRoll.dc}
             </div>
             <div className={`mt-1 text-lg ${game.lastRoll.success ? "text-emerald-300" : "text-red-400"}`}>
-              {game.lastRoll.critical === "success" ? "CRITICAL!" : game.lastRoll.critical === "failure" ? "critical failure" : game.lastRoll.success ? "success" : "failure"}
+              {game.lastRoll.critical === "success" ? "Critical!" : game.lastRoll.critical === "failure" ? "Critical Failure" : game.lastRoll.success ? "Success" : "Failure"}
             </div>
           </div>
         </Center>
@@ -218,7 +312,7 @@ function GameScreen({ game, myName }: { game: ReturnType<typeof useGame>; myName
             Roll {state.pendingCheck!.skill} <span className="opacity-75 text-base">(DC {state.pendingCheck!.dc})</span>
           </button>
         ) : state.pendingCheck ? (
-          <div className="text-stone-300 text-sm ember">waiting for {state.pendingCheck.playerName} to roll<span>.</span><span>.</span><span>.</span></div>
+          <div className="text-stone-300 text-sm ember">Waiting for {state.pendingCheck.playerName} to roll<span>.</span><span>.</span><span>.</span></div>
         ) : notStarted ? (
           <form className="w-full max-w-2xl flex gap-2"
             onSubmit={e => { e.preventDefault(); if (!state.dmBusy) game.send({ type: "new_campaign", premise }); }}>
@@ -245,7 +339,7 @@ function GameScreen({ game, myName }: { game: ReturnType<typeof useGame>; myName
             <form className="w-full max-w-2xl flex gap-2"
               onSubmit={e => { e.preventDefault(); if (!state.dmBusy) act(input); }}>
               <input value={input} onChange={e => setInput(e.target.value)}
-                placeholder={state.dmBusy ? "the storyteller is speaking..." : "What do you do?"}
+                placeholder={state.dmBusy ? "The Storyteller is speaking..." : "What do you do?"}
                 disabled={state.dmBusy}
                 className="flex-1 bg-stone-900/85 border border-stone-700 rounded-xl px-4 py-3 outline-none focus:border-amber-600/60 disabled:opacity-60" />
               <button type="submit" disabled={state.dmBusy || !input.trim()}
@@ -301,7 +395,7 @@ function Narration({ state, live }: { state: NonNullable<ReturnType<typeof useGa
         </p>
       )}
       {state.dmBusy && live === null && (
-        <p className="ember text-stone-400 text-sm">the storyteller considers<span>.</span><span>.</span><span>.</span></p>
+        <p className="ember text-stone-400 text-sm">The Storyteller considers<span>.</span><span>.</span><span>.</span></p>
       )}
     </div>
   );
@@ -320,7 +414,7 @@ function Avatar({ c, className }: { c: Character; className: string }) {
 function PartyBadge({ c, me, onClick }: { c: Character; me: boolean; onClick: () => void }) {
   const pct = Math.round((c.hp / c.maxHp) * 100);
   return (
-    <button onClick={onClick} title="view character sheet"
+    <button onClick={onClick} title="View Character Sheet"
       className={`text-left flex items-center gap-2.5 rounded-xl pl-1.5 pr-3 py-1.5 bg-black/55 backdrop-blur-sm border transition hover:border-amber-500/60 ${me ? "border-amber-600/50" : "border-stone-700/50"} min-w-44`}>
       <Avatar c={c} className="w-10 h-10 rounded-lg" />
       <div className="flex-1">
@@ -352,7 +446,7 @@ function Drawer({ title, onClose, children }: { title: string; onClose: () => vo
         className="fadein-fast absolute right-0 top-0 h-full w-full max-w-sm bg-stone-950/95 backdrop-blur border-l border-stone-800 overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-stone-800 sticky top-0 bg-stone-950/95">
           <div className="narration text-xl text-amber-100/90">{title}</div>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-200 text-sm px-2 py-1">close</button>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-200 text-sm px-2 py-1">Close</button>
         </div>
         <div className="px-5 py-4">{children}</div>
       </div>
@@ -361,19 +455,35 @@ function Drawer({ title, onClose, children }: { title: string; onClose: () => vo
 }
 
 function SheetDrawer({ c, onClose }: { c: Character; onClose: () => void }) {
-  const profSkills = c.proficientSkills.map(s => ({
+  const rules = CLASS_BUILD_RULES[c.className];
+  const allSkills = SKILLS.map(s => ({
     skill: s,
-    bonus: mod(c.abilities[SKILL_ABILITY[s]] ?? 10) + c.proficiencyBonus,
+    proficient: c.proficientSkills.includes(s),
   }));
+  const passivePerception = 10 + mod(c.abilities.WIS ?? 10)
+    + (c.proficientSkills.includes("Perception") ? c.proficiencyBonus : 0);
   return (
     <Drawer title={c.name} onClose={onClose}>
       <div className="flex items-center gap-4 mb-5">
         <Avatar c={c} className="w-20 h-20 rounded-xl" />
         <div>
-          <div className="text-stone-200">{c.className} · level {c.level}</div>
+          <div className="text-stone-200">{c.className} · Level {c.level}</div>
           <div className="text-stone-400 text-sm capitalize">{c.age} {c.sex}</div>
-          <div className="text-stone-400 text-sm mt-1">{c.hp}/{c.maxHp} HP · AC {c.ac} · prof +{c.proficiencyBonus}</div>
+          <div className="text-stone-400 text-sm mt-1">{c.hp}/{c.maxHp} HP · AC {c.ac} · Proficiency +{c.proficiencyBonus}</div>
         </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 mb-5">
+        {[
+          ["Armor Class", c.ac], ["Initiative", fmtMod(mod(c.abilities.DEX ?? 10))], ["Speed", "30 ft."],
+          ["Hit Points", `${c.hp}/${c.maxHp}`], ["Hit Dice", `${c.level}d${rules.hitDie}`],
+          ["Passive Perception", passivePerception],
+        ].map(([label, value]) => (
+          <div key={label} className="rounded-xl border border-stone-800 bg-stone-900/70 p-2 text-center">
+            <div className="text-lg text-stone-100">{value}</div>
+            <div className="text-[9px] uppercase tracking-wide text-stone-500">{label}</div>
+          </div>
+        ))}
       </div>
 
       <div className="grid grid-cols-3 gap-2 mb-5">
@@ -386,21 +496,33 @@ function SheetDrawer({ c, onClose }: { c: Character; onClose: () => void }) {
         ))}
       </div>
 
-      <SectionTitle>Trained skills</SectionTitle>
-      <div className="flex flex-wrap gap-1.5 mb-5">
-        {profSkills.map(({ skill, bonus }) => (
-          <span key={skill} className="text-xs rounded-full border border-stone-700 bg-stone-900/70 px-2.5 py-1 text-stone-300">
-            {skill} <span className="text-amber-200/80">{fmtMod(bonus)}</span>
-          </span>
-        ))}
+      <SectionTitle>Saving Throws</SectionTitle>
+      <div className="grid grid-cols-3 gap-1.5 mb-5">
+        {ABILITIES.map(ability => {
+          const proficient = rules.savingThrows.includes(ability);
+          const bonus = mod(c.abilities[ability] ?? 10) + (proficient ? c.proficiencyBonus : 0);
+          return <div key={ability} className={`text-xs rounded-lg border px-2 py-1 ${proficient ? "border-amber-700/60 text-amber-200" : "border-stone-800 text-stone-500"}`}>
+            {proficient ? "●" : "○"} {ability} <span className="float-right">{fmtMod(bonus)}</span>
+          </div>;
+        })}
+      </div>
+
+      <SectionTitle>Skills</SectionTitle>
+      <div className="grid grid-cols-2 gap-1.5 mb-5">
+        {allSkills.map(({ skill, proficient }) => {
+          const bonus = mod(c.abilities[SKILL_ABILITY[skill]] ?? 10) + (proficient ? c.proficiencyBonus : 0);
+          return <div key={skill} className={`text-xs rounded-lg border px-2 py-1 ${proficient ? "border-amber-700/60 text-amber-200" : "border-stone-800 text-stone-500"}`}>
+            {proficient ? "●" : "○"} {skill} <span className="float-right">{fmtMod(bonus)}</span>
+          </div>;
+        })}
       </div>
 
       <SectionTitle>Inventory</SectionTitle>
       <ul className="mb-5 space-y-1">
         {c.inventory.map((item, i) => (
-          <li key={i} className="text-sm text-stone-300 border-b border-stone-900 pb-1">{item}</li>
+          <li key={i} className="text-sm text-stone-300 border-b border-stone-900 pb-1 capitalize">{item}</li>
         ))}
-        {c.inventory.length === 0 && <li className="text-sm text-stone-500 italic">empty pockets</li>}
+        {c.inventory.length === 0 && <li className="text-sm text-stone-500 italic">Empty Pockets</li>}
       </ul>
 
       {c.bio && (
@@ -422,12 +544,12 @@ function SettingsPanel({ game, onClose }: { game: ReturnType<typeof useGame>; on
       <div className="flex items-center gap-2 mb-3">
         <button onClick={() => game.audio.setMuted(!game.audio.muted)}
           className={`rounded-xl border px-3 py-1.5 text-sm transition ${game.audio.muted ? "border-stone-700 text-stone-500" : "border-amber-600/60 text-amber-200 bg-amber-950/30"}`}>
-          {game.audio.muted ? "voice off" : "voice on"}
+          {game.audio.muted ? "Voice Off" : "Voice On"}
         </button>
         {(game.audio.speaking || game.audio.paused) && !game.audio.muted && (
           <button onClick={game.audio.togglePause}
             className="rounded-xl border border-stone-700 px-3 py-1.5 text-sm text-stone-300 hover:border-stone-500">
-            {game.audio.paused ? "resume" : "pause"}
+            {game.audio.paused ? "Resume" : "Pause"}
           </button>
         )}
       </div>
@@ -440,7 +562,7 @@ function SettingsPanel({ game, onClose }: { game: ReturnType<typeof useGame>; on
         ))}
       </div>
       <label className="block mb-6">
-        <span className="text-xs text-stone-500">volume</span>
+        <span className="text-xs text-stone-500">Volume</span>
         <input type="range" min={0} max={1} step={0.05} value={game.audio.volume}
           onChange={e => game.audio.setVolume(Number(e.target.value))}
           className="w-full accent-amber-600" />
@@ -466,19 +588,19 @@ function SettingsPanel({ game, onClose }: { game: ReturnType<typeof useGame>; on
               <div className="text-[10px] text-stone-500">{s.savedAt}</div>
             </div>
             <button onClick={() => { if (confirm(`Load "${s.name}"? Unsaved progress in the current tale is replaced.`)) game.send({ type: "load_slot", id: s.id }); }}
-              className="text-xs rounded-lg border border-stone-700 px-2.5 py-1 text-stone-300 hover:border-amber-500/60">load</button>
+              className="text-xs rounded-lg border border-stone-700 px-2.5 py-1 text-stone-300 hover:border-amber-500/60">Load</button>
             <button onClick={() => { if (confirm(`Delete save "${s.name}"?`)) game.send({ type: "delete_slot", id: s.id }); }}
-              className="text-xs rounded-lg border border-stone-800 px-2.5 py-1 text-stone-500 hover:border-red-500/60 hover:text-red-300">delete</button>
+              className="text-xs rounded-lg border border-stone-800 px-2.5 py-1 text-stone-500 hover:border-red-500/60 hover:text-red-300">Delete</button>
           </li>
         ))}
-        {state.saves.length === 0 && <li className="text-sm text-stone-500 italic">no saves yet</li>}
+        {state.saves.length === 0 && <li className="text-sm text-stone-500 italic">No Saves Yet</li>}
       </ul>
 
       <SectionTitle>Danger</SectionTitle>
       <button
         onClick={() => { if (confirm("Start a completely new game? The current tale and all heroes are cleared (save it to a slot first if you want to keep it).")) { game.send({ type: "new_game" }); onClose(); } }}
         className="w-full rounded-xl border border-red-900/70 text-red-300/90 hover:bg-red-950/40 py-2.5 text-sm font-medium transition">
-        New game (clears current tale)
+        New Game (Clears Current Tale)
       </button>
     </Drawer>
   );

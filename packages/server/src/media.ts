@@ -9,11 +9,15 @@ fs.mkdirSync(AUDIO_DIR, { recursive: true });
 
 // ---------- Scene art (ComfyUI, fully async, cached by scene signature) ----------
 
-export function sceneSignature(s: Pick<Scene, "kind" | "timeOfDay" | "weather" | "mood">): string {
+export function sceneSignature(
+  s: Pick<Scene, "name" | "kind" | "timeOfDay" | "weather" | "mood" | "imagePrompt">,
+): string {
   // must stay a valid Windows filename: lowercase alnum and dashes only
-  return [s.kind, s.timeOfDay, s.weather, s.mood]
-    .map(part => part.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""))
+  const slug = [s.name, s.kind, s.timeOfDay, s.weather, s.mood]
+    .map(part => part.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32))
     .join("--");
+  const composition = crypto.createHash("sha256").update(s.imagePrompt).digest("hex").slice(0, 10);
+  return `${slug}--${composition}`;
 }
 
 function lcmWorkflow(prompt: string, seed: number) {

@@ -14,6 +14,15 @@ export type Skill = z.infer<typeof SkillSchema>;
 export const ABILITIES = ["STR", "DEX", "CON", "INT", "WIS", "CHA"] as const;
 export const AbilitySchema = z.enum(ABILITIES);
 export type Ability = z.infer<typeof AbilitySchema>;
+export const AbilityScoresSchema = z.object({
+  STR: z.number().int().min(8).max(15),
+  DEX: z.number().int().min(8).max(15),
+  CON: z.number().int().min(8).max(15),
+  INT: z.number().int().min(8).max(15),
+  WIS: z.number().int().min(8).max(15),
+  CHA: z.number().int().min(8).max(15),
+});
+export type AbilityScores = z.infer<typeof AbilityScoresSchema>;
 
 export const SKILL_ABILITY: Record<Skill, Ability> = {
   Athletics: "STR",
@@ -166,6 +175,9 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
     age: AgeSchema.default("adult"),
     bio: z.string().max(300).default(""),
     portraitUrl: z.string().max(300).nullable().default(null),
+    /** Optional for reconnect compatibility with identities saved before the guided builder. */
+    abilities: AbilityScoresSchema.optional(),
+    proficientSkills: z.array(SkillSchema).max(4).optional(),
   }),
   z.object({ type: z.literal("action"), text: z.string().min(1).max(500) }),
   z.object({ type: z.literal("roll") }), // respond to a pending roll request

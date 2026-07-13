@@ -8,6 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@grimoire/rules": "*",
     "@grimoire/shared": "*",
     "react": "^18.3.0",
     "react-dom": "^18.3.0"

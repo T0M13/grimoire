@@ -24,7 +24,10 @@ export const CONFIG = {
   lcmLora: "lcm-lora-sdv15.safetensors",
   /** Locked style so every scene reads as one artist's work. */
   imageStyle:
-    "cinematic, painterly, atmospheric, detailed digital painting, dramatic lighting, fantasy concept art",
+    "cinematic storybook fantasy illustration, painterly environmental storytelling, coherent architecture, " +
+    "clear indoor or outdoor spatial context, wide cinematic composition, characters naturally integrated into " +
+    "the environment and visibly interacting, dramatic motivated lighting, consistent muted color palette, detailed concept art",
   imageNegative:
-    "photo, photorealistic, modern, text, letters, watermark, signature, low quality, blurry, deformed",
+    "photo, photorealistic, modern, empty generic landscape, unrelated scenery, floating people, character lineup, " +
+    "text, letters, sign, caption, watermark, signature, low quality, blurry, deformed, duplicate people",
 };

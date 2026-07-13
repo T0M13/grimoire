@@ -20,12 +20,14 @@ The game is fun for ONE player with text + voice only.
 - [x] Node server (`ws` room, full-state sync — Colyseus deferred), React shell, SQLite
   write-through persistence *(built 2026-07-13, e2e verified)*
 - [x] Rules engine v1: skill checks (nat 1/20), dice notation, ability/prof modifiers,
-  damage/heal, seeded RNG — 20 unit tests
+  damage/heal, seeded RNG, point-buy validation, and derived level-3 HP/AC
 - [ ] SRD data import (5e-database JSON → SQLite) — using 4 hand-built pregens for now
 - [x] DM orchestrator: constrained move pass (narrate / request_check / change_scene /
   give_item) + streamed narration pass; stall guard; semantic validation + retry
-- [x] MVP character creation: pregen class picker, identity/flavor fields, randomizer, async
-  portrait, and character-sheet drawer *(full SRD builder remains later work)*
+- [x] MVP character creation: four SRD classes, 27-point-buy abilities, legal class skill
+  proficiencies, starter packs, identity/flavor fields, randomizer, portrait, and sheet drawer
+- [ ] Complete SRD character builder: species, backgrounds, languages, equipment alternatives,
+  class features, subclasses, and spell selection
 - [x] Storyteller voice (Kokoro **CUDA sidecar**, ~190 ms/sentence, sentence-streamed with
   early first-clause) + streamed text
 - [x] Scene-graph movement with clickable exits
@@ -46,6 +48,13 @@ The game is fun for ONE player with text + voice only.
 - 3D dice (dice-box) wired to roll requests
 
 ## Phase 3 — Friends join (multiplayer)
+
+- Recipient-aware narration: the active character is always "you"; private and shared feeds
+- Location/activity model for split-party exploration and parallel NPC conversations
+- Personal, party, and world quest/event journal with deterministic transitions
+- Material-event promotion: local actions can interrupt or update every affected player
+- Persistent NPC descriptions and cached dialogue shots within stable location art
+- Full design and staged delivery: `06-open-world-multiplayer.md`
 - Lobby, invite codes, seats, reconnection, drop-in/out
 - Spotlight system; private whispers; per-player roll locks
 - Tailscale/cloudflared setup docs + connection doctor in the launcher

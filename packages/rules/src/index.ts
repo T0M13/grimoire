@@ -93,40 +93,107 @@ export function heal(character: Character, amount: number): Character {
   return { ...character, hp: Math.min(character.maxHp, character.hp + Math.max(0, amount)) };
 }
 
-// ---------- Pregenerated SRD-style level-3 party (MVP character select) ----------
+// ---------- SRD 5.1 character creation ----------
 
-function makeCharacter(
-  id: string,
-  name: string,
-  className: Character["className"],
+export const POINT_BUY_BUDGET = 27;
+export const POINT_BUY_COST: Record<number, number> = {
+  8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9,
+};
+export const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8] as const;
+
+export interface ClassBuildRules {
+  id: "fighter" | "rogue" | "cleric" | "wizard";
+  className: Character["className"];
+  hitDie: 6 | 8 | 10;
+  savingThrows: readonly Ability[];
+  skillChoices: readonly Skill[];
+  skillCount: number;
+  recommendedSkills: readonly Skill[];
+  recommendedAbilities: Record<Ability, number>;
+  starterEquipment: readonly string[];
+}
+
+export const CLASS_BUILD_RULES: Record<Character["className"], ClassBuildRules> = {
+  Fighter: {
+    id: "fighter", className: "Fighter", hitDie: 10, savingThrows: ["STR", "CON"], skillCount: 2,
+    recommendedSkills: ["Athletics", "Perception"],
+    skillChoices: ["Acrobatics", "Animal Handling", "Athletics", "History", "Insight", "Intimidation", "Perception", "Survival"],
+    recommendedAbilities: { STR: 15, DEX: 14, CON: 13, INT: 8, WIS: 10, CHA: 12 },
+    starterEquipment: ["chain mail", "longsword", "shield", "light crossbow", "20 bolts", "explorer's pack"],
+  },
+  Rogue: {
+    id: "rogue", className: "Rogue", hitDie: 8, savingThrows: ["DEX", "INT"], skillCount: 4,
+    recommendedSkills: ["Stealth", "Sleight of Hand", "Acrobatics", "Investigation"],
+    skillChoices: ["Acrobatics", "Athletics", "Deception", "Insight", "Intimidation", "Investigation", "Perception", "Performance", "Persuasion", "Sleight of Hand", "Stealth"],
+    recommendedAbilities: { STR: 12, DEX: 15, CON: 13, INT: 14, WIS: 10, CHA: 8 },
+    starterEquipment: ["rapier", "shortbow", "20 arrows", "burglar's pack", "leather armor", "2 daggers", "thieves' tools"],
+  },
+  Cleric: {
+    id: "cleric", className: "Cleric", hitDie: 8, savingThrows: ["WIS", "CHA"], skillCount: 2,
+    recommendedSkills: ["Insight", "Religion"],
+    skillChoices: ["History", "Insight", "Medicine", "Persuasion", "Religion"],
+    recommendedAbilities: { STR: 14, DEX: 8, CON: 13, INT: 10, WIS: 15, CHA: 12 },
+    starterEquipment: ["mace", "scale mail", "light crossbow", "20 bolts", "priest's pack", "shield", "holy symbol"],
+  },
+  Wizard: {
+    id: "wizard", className: "Wizard", hitDie: 6, savingThrows: ["INT", "WIS"], skillCount: 2,
+    recommendedSkills: ["Arcana", "Investigation"],
+    skillChoices: ["Arcana", "History", "Insight", "Investigation", "Medicine", "Religion"],
+    recommendedAbilities: { STR: 8, DEX: 12, CON: 13, INT: 15, WIS: 14, CHA: 10 },
+    starterEquipment: ["quarterstaff", "component pouch", "scholar's pack", "spellbook"],
+  },
+};
+
+export function pointBuySpent(abilities: Record<Ability, number>): number {
+  return Object.values(abilities).reduce((total, score) => total + (POINT_BUY_COST[score] ?? 999), 0);
+}
+
+export function classRulesById(id: string): ClassBuildRules | undefined {
+  return Object.values(CLASS_BUILD_RULES).find(rules => rules.id === id);
+}
+
+export function validateCharacterChoices(
+  rules: ClassBuildRules,
   abilities: Record<Ability, number>,
   proficientSkills: Skill[],
-  maxHp: number,
-  ac: number,
-  inventory: string[],
+): string | null {
+  if (pointBuySpent(abilities) !== POINT_BUY_BUDGET)
+    return `Ability scores must spend exactly ${POINT_BUY_BUDGET} point-buy points.`;
+  if (new Set(proficientSkills).size !== rules.skillCount || proficientSkills.length !== rules.skillCount)
+    return `${rules.className} must choose exactly ${rules.skillCount} class skill proficiencies.`;
+  if (proficientSkills.some(skill => !rules.skillChoices.includes(skill)))
+    return `One or more selected skills are not available to ${rules.className}.`;
+  return null;
+}
+
+export function buildLevelThreeCharacter(
+  id: string,
+  name: string,
+  rules: ClassBuildRules,
+  abilities: Record<Ability, number>,
+  proficientSkills: Skill[],
 ): Character {
+  const con = abilityModifier(abilities.CON);
+  const maxHp = rules.hitDie + con + 2 * (Math.floor(rules.hitDie / 2) + 1 + con);
+  const dex = abilityModifier(abilities.DEX);
+  const ac = rules.className === "Fighter" ? 18
+    : rules.className === "Cleric" ? 16 + Math.min(2, dex)
+    : rules.className === "Rogue" ? 11 + dex
+    : 10 + dex;
   return {
-    id, name, sex: "male", age: "adult", bio: "", className, level: 3,
-    abilities, proficientSkills, proficiencyBonus: 2,
-    maxHp, hp: maxHp, ac, inventory, portraitUrl: null,
+    id, name, sex: "male", age: "adult", bio: "", className: rules.className, level: 3,
+    abilities: { ...abilities }, proficientSkills: [...proficientSkills], proficiencyBonus: 2,
+    maxHp, hp: maxHp, ac, inventory: [...rules.starterEquipment], portraitUrl: null,
   };
 }
 
-export const PREGEN_CHARACTERS: Character[] = [
-  makeCharacter("fighter", "Fighter", "Fighter",
-    { STR: 16, DEX: 12, CON: 15, INT: 10, WIS: 12, CHA: 10 },
-    ["Athletics", "Intimidation", "Perception"],
-    28, 17, ["longsword", "shield", "chain mail", "torch", "rations"]),
-  makeCharacter("rogue", "Rogue", "Rogue",
-    { STR: 10, DEX: 16, CON: 12, INT: 13, WIS: 12, CHA: 14 },
-    ["Stealth", "Sleight of Hand", "Acrobatics", "Deception", "Perception"],
-    21, 14, ["shortsword", "dagger", "thieves' tools", "hooded lantern"]),
-  makeCharacter("cleric", "Cleric", "Cleric",
-    { STR: 14, DEX: 10, CON: 14, INT: 10, WIS: 16, CHA: 12 },
-    ["Insight", "Medicine", "Religion", "Persuasion"],
-    24, 16, ["mace", "shield", "holy symbol", "healer's kit"]),
-  makeCharacter("wizard", "Wizard", "Wizard",
-    { STR: 8, DEX: 14, CON: 13, INT: 16, WIS: 12, CHA: 10 },
-    ["Arcana", "History", "Investigation", "Insight"],
-    17, 12, ["quarterstaff", "spellbook", "component pouch", "ink and quill"]),
-];
+// Defaults remain useful to tests, scripted clients, and backward-compatible joins.
+export const PREGEN_CHARACTERS: Character[] = Object.values(CLASS_BUILD_RULES).map(rules =>
+  buildLevelThreeCharacter(
+    rules.id,
+    rules.className,
+    rules,
+    rules.recommendedAbilities,
+    [...rules.recommendedSkills],
+  ),
+);

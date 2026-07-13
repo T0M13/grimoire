@@ -42,6 +42,7 @@ the campaign continues next weekend exactly where it stopped.
 | [docs/03-architecture.md](docs/03-architecture.md) | Tech stack, AI models for a 12 GB GPU, latency budget, data model |
 | [docs/04-roadmap.md](docs/04-roadmap.md) | Phased build plan, MVP definition |
 | [docs/05-handoff.md](docs/05-handoff.md) | Exact implemented state, setup, code map, and continuation checklist |
+| [docs/06-open-world-multiplayer.md](docs/06-open-world-multiplayer.md) | Parallel NPC dialogue, world events, quest scopes, and persistent scene-shot plan |
 | [.claude/skills/grimoire/SKILL.md](.claude/skills/grimoire/SKILL.md) | Claude Code skill: how to work on this project |
 
 ## Quickstart (Windows host)

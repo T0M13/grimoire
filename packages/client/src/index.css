@@ -11,6 +11,9 @@ body {
   overflow: hidden;
 }
 
+/* Player-facing controls use consistent title capitalization. */
+button { text-transform: capitalize; }
+
 .narration {
   font-family: var(--serif);
 }

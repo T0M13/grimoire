@@ -47,9 +47,9 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
   `SentenceStream` with early first-clause emit), SQLite write-through (`db.ts`),
   config in `config.ts` (ports, models, style prompts).
 - `packages/client` — React/Vite/Tailwind v4. One screen: join → story. `useGame.ts` owns the
-  socket, reconnection, and the sequential narration-audio queue. `App.tsx` includes randomized
-  creation, character sheets, and settings/save controls. `SceneArt` crossfades new art in behind
-  the story; presentation never blocks input.
+  socket, reconnection, and the sequential narration-audio queue. `App.tsx` includes SRD point-buy
+  creation, class skill choices, randomized legal builds, full skill/save sheet views, and settings.
+  `SceneArt` crossfades new art behind the story; presentation never blocks input.
 - Sidecars (HTTP, may be down — text-only mode must always work):
   - Ollama `:11434` (llama3.1:8b, constrained JSON via `format`)
   - ComfyUI `:8188` headless (`spikes/run-comfy.ps1`; install at `vendor/ComfyUI` with own venv)
@@ -76,8 +76,10 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
 - LLM tool calls use constrained decoding — never regex-parse free text for mechanics.
 - New DM capabilities = extend `DmMove` + `DM_MOVE_JSON_SCHEMA` in `shared`, handle in
   `game.ts` `onAction`, add narration guidance in `prompts/dm-system.md`. Keep moves small.
-- Asset cache keys: `sceneSignature` = kind/timeOfDay/weather/mood, joined with `--`,
-  lowercase alnum+dash only (Windows-safe filenames — no `|`, `:`, `/`).
+- Asset cache keys include location name/kind/time/weather/mood plus a hash of the composition
+  prompt, joined with `--`, lowercase alnum+dash only (Windows-safe filenames).
+- Narration for an active character must be second-person (`you/your`), never their own name or
+  third-person pronouns. Parallel dialogue/event design lives in `docs/06-open-world-multiplayer.md`.
 - Prompts live in versioned files (`packages/server/prompts/`), not inline strings.
 - Windows gotchas: PowerShell 5.1 `Get-Content`/`Set-Content` mangles UTF-8 (use Write/Edit
   tools); `|` is illegal in filenames; prefer `curl.exe` over `Invoke-WebRequest` for binaries.

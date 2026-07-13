@@ -36,15 +36,25 @@ describe("SentenceStream", () => {
 });
 
 describe("sceneSignature", () => {
+  const scene = {
+    name: "The Copper Cup", kind: "Rainy Tavern!", timeOfDay: "night" as const,
+    weather: "rain" as const, mood: "tavern" as const,
+    imagePrompt: "warm tavern interior where a worried innkeeper leans across the bar",
+  };
+
   it("is stable and filesystem-safe on Windows", () => {
-    const sig = sceneSignature({ kind: "Rainy Tavern!", timeOfDay: "night", weather: "rain", mood: "tavern" });
-    expect(sig).toBe("rainy-tavern--night--rain--tavern");
+    const sig = sceneSignature(scene);
+    expect(sig).toMatch(/^the-copper-cup--rainy-tavern--night--rain--tavern--[a-f0-9]{10}$/);
     expect(sig).toMatch(/^[a-z0-9-]+$/); // no |, /, \, : - all illegal in filenames
   });
   it("differs when any component differs", () => {
-    const a = sceneSignature({ kind: "tavern", timeOfDay: "night", weather: "rain", mood: "tavern" });
-    const b = sceneSignature({ kind: "tavern", timeOfDay: "day", weather: "rain", mood: "tavern" });
+    const a = sceneSignature(scene);
+    const b = sceneSignature({ ...scene, timeOfDay: "day" });
     expect(a).not.toBe(b);
+  });
+  it("keeps a consistent cached shot but distinguishes a new composition", () => {
+    expect(sceneSignature(scene)).toBe(sceneSignature({ ...scene }));
+    expect(sceneSignature(scene)).not.toBe(sceneSignature({ ...scene, imagePrompt: "empty tavern" }));
   });
 });
 

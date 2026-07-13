@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  abilityModifier, applyDamage, d20, heal, PREGEN_CHARACTERS,
+  abilityModifier, applyDamage, buildLevelThreeCharacter, CLASS_BUILD_RULES, d20, heal,
+  POINT_BUY_BUDGET, PREGEN_CHARACTERS, pointBuySpent,
   resolveCheck, roll, rollDie, seededRng, skillModifier,
+  validateCharacterChoices,
 } from "./index.js";
 import type { CheckRequest } from "@grimoire/shared";
 
@@ -72,10 +74,10 @@ describe("abilityModifier", () => {
 
 describe("skillModifier", () => {
   it("adds proficiency only when proficient", () => {
-    // rogue: DEX 16 (+3), proficient in Stealth (+2 prof) = +5
-    expect(skillModifier(rogue, "Stealth")).toBe(5);
-    // rogue: WIS 12 (+1), not proficient in Survival = +1
-    expect(skillModifier(rogue, "Survival")).toBe(1);
+    // rogue: DEX 15 (+2), proficient in Stealth (+2 prof) = +4
+    expect(skillModifier(rogue, "Stealth")).toBe(4);
+    // rogue: WIS 10 (+0), not proficient in Survival = +0
+    expect(skillModifier(rogue, "Survival")).toBe(0);
   });
 });
 
@@ -97,7 +99,7 @@ describe("resolveCheck", () => {
     for (let seed = 0; seed < 200; seed++) {
       const r = resolveCheck(rogue, check, seededRng(seed));
       expect(r.total).toBe(r.die + r.modifier);
-      expect(r.modifier).toBe(5);
+      expect(r.modifier).toBe(4);
       if (r.critical === "none") expect(r.success).toBe(r.total >= 12);
     }
   });
@@ -134,5 +136,29 @@ describe("pregen party", () => {
       expect(c.proficiencyBonus).toBe(2);
       expect(Object.keys(c.abilities)).toHaveLength(6);
     }
+  });
+});
+
+describe("SRD point-buy character creation", () => {
+  it("uses the official 27-point budget for every class recommendation", () => {
+    for (const rules of Object.values(CLASS_BUILD_RULES))
+      expect(pointBuySpent(rules.recommendedAbilities)).toBe(POINT_BUY_BUDGET);
+  });
+
+  it("rejects overspent abilities and wrong class skill choices", () => {
+    const rules = CLASS_BUILD_RULES.Wizard;
+    expect(validateCharacterChoices(rules, { ...rules.recommendedAbilities, CHA: 15 }, ["Arcana", "History"]))
+      .toContain("27");
+    expect(validateCharacterChoices(rules, rules.recommendedAbilities, ["Athletics", "History"]))
+      .toContain("not available");
+  });
+
+  it("derives level-three HP, AC, skills, and starter equipment from mechanics", () => {
+    const rules = CLASS_BUILD_RULES.Wizard;
+    const wizard = buildLevelThreeCharacter("id", "Cedric", rules, rules.recommendedAbilities, ["Arcana", "Investigation"]);
+    expect(wizard.maxHp).toBe(17);
+    expect(wizard.ac).toBe(11);
+    expect(wizard.proficientSkills).toEqual(["Arcana", "Investigation"]);
+    expect(wizard.inventory).toContain("spellbook");
   });
 });

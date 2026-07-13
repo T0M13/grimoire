@@ -3,12 +3,13 @@
 Last updated: 2026-07-13
 
 This is the fast orientation document for the next developer or AI working on Grimoire. Read
-the four design documents for product intent; use this file for the exact implemented state.
+the design documents for product intent; use this file for the exact implemented state.
 
 ## Current state
 
 Phase 1 is a playable local-first vertical slice. A player can create a level-3 hero from four
-SRD-style templates, optionally randomize all creation fields, generate a custom portrait, begin
+SRD classes using 27-point-buy abilities and legal class skill choices, optionally randomize all
+creation fields, receive a class starter pack, generate a custom portrait, begin
 a campaign, act through free text or suggestions, make deterministic skill checks, hear streamed
 Kokoro narration, see asynchronous scene art, inspect character sheets, and resume from SQLite.
 
@@ -18,12 +19,17 @@ multiplayer lobby/seat/spotlight feature set remains Phase 3 work.
 ## Implemented features
 
 - React/Vite/Tailwind client with reconnect-safe identity in browser local storage.
-- Character creation: name, sex, age, class template, written bio, and one-click randomizer.
+- Character creation: name, sex, age, class, written bio, and one-click randomizer.
+- SRD 5.1 ability point buy (8–15, 27 points), class skill-proficiency choices, derived HP/AC,
+  and class starter equipment; server-side validation rejects mechanically invalid builds.
 - Background portrait generation with a `?` placeholder until the image is ready.
+- Active-player narration viewpoint: the storyteller addresses the character as "you/your" and
+  solo openings cannot describe the player as accompanying their own character.
 - Clickable party badges and a character-sheet drawer for every party member.
 - Constrained two-pass AI DM: structured move selection, then streamed narration.
 - Deterministic rules engine for dice, skill checks, damage, and healing; automated test suite.
-- Async ComfyUI scene art with scene-signature caching and crossfade presentation.
+- Async ComfyUI scene art with composition-aware caching and crossfade presentation. Prompts
+  specify indoor/outdoor context, visible NPCs, and their physical action in the current hook.
 - Kokoro CUDA narration using `bm_fable` (male) and `af_heart` (female).
 - Per-tab mute, volume, and pause/resume. Muting cuts the current sentence immediately.
 - Table-wide narrator selection persisted in campaign state.
@@ -34,6 +40,8 @@ multiplayer lobby/seat/spotlight feature set remains Phase 3 work.
 - Linux server mode binds the web UI/game API for remote clients while keeping model sidecars
   private on loopback; persistent mode and a systemd unit template support always-on hosts.
 - New-game flow that keeps named saves and the selected narrator available.
+- Parallel NPC dialogue, scoped quests/events, and persistent dialogue-shot architecture is
+  specified in `docs/06-open-world-multiplayer.md`; implementation remains Phase 3 work.
 
 ## Fresh-clone setup
 

@@ -113,9 +113,10 @@ presentation layer reacts *during* play:
   darkening — input stays available the whole time.
 - **Session start:** a short spoken "previously on..." recap plays over the last scene's art
   while players are already free to look at their sheets and act.
-- **Image caching by scene signature** (location type + time of day + weather + mood): the
-  second visit to any tavern at night reuses cached art instantly. Ship with a pre-generated
-  starter library (~100 common scenes) so even session one feels instant.
+- **Image caching by scene composition signature** (location identity/type + time + weather +
+  mood + prompt hash): revisiting the same shot reuses art, while a materially different NPC
+  interaction can receive a distinct cached composition. Ship with a pre-generated starter
+  library (~100 common scenes) so even session one feels instant.
 - Consistent art style via a locked style prompt (and later a style LoRA); characters get
   portrait art generated once at creation, then reused everywhere.
 
@@ -146,8 +147,10 @@ presentation layer reacts *during* play:
 
 ## 10. Characters & saves
 
-- Guided character builder (SRD races/classes/backgrounds), point-buy or standard array,
-  auto-derived stats. Full 5e sheet stored server-side; players see a clean tabbed sheet UI
+- The live first slice has four SRD classes, 27-point-buy abilities, legal class skill choices,
+  starter equipment, and auto-derived level-3 HP/AC/saves. The next builder slice adds species,
+  backgrounds, languages, equipment alternatives, class features, and spell selection.
+- The full 5e sheet is stored server-side; players see a clean tabbed sheet UI
   (Stats / Inventory / Spells / Notes). Level-ups are guided ceremonies with a cutscene.
 - Characters are reusable across campaigns. Everything (campaign, world, log, images metadata)
   is saved continuously — closing the browser loses nothing; "load campaign" resumes mid-scene.
