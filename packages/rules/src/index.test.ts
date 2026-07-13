@@ -1,0 +1,138 @@
+import { describe, expect, it } from "vitest";
+import {
+  abilityModifier, applyDamage, d20, heal, PREGEN_CHARACTERS,
+  resolveCheck, roll, rollDie, seededRng, skillModifier,
+} from "./index.js";
+import type { CheckRequest } from "@grimoire/shared";
+
+const rogue = PREGEN_CHARACTERS.find(c => c.id === "rogue")!;
+
+describe("seededRng", () => {
+  it("is deterministic for a given seed", () => {
+    const a = seededRng(42), b = seededRng(42);
+    for (let i = 0; i < 10; i++) expect(a()).toBe(b());
+  });
+  it("produces values in [0, 1)", () => {
+    const rng = seededRng(7);
+    for (let i = 0; i < 1000; i++) {
+      const v = rng();
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThan(1);
+    }
+  });
+});
+
+describe("rollDie", () => {
+  it("stays within bounds and hits both extremes over many rolls", () => {
+    const rng = seededRng(1);
+    const seen = new Set<number>();
+    for (let i = 0; i < 5000; i++) {
+      const v = rollDie(20, rng);
+      expect(v).toBeGreaterThanOrEqual(1);
+      expect(v).toBeLessThanOrEqual(20);
+      seen.add(v);
+    }
+    expect(seen.size).toBe(20);
+  });
+  it("rejects invalid dice", () => {
+    expect(() => rollDie(1, seededRng(1))).toThrow();
+    expect(() => rollDie(2.5, seededRng(1))).toThrow();
+  });
+});
+
+describe("roll (notation)", () => {
+  it("parses NdM+K", () => {
+    const r = roll("2d6+3", seededRng(3));
+    expect(r.rolls).toHaveLength(2);
+    expect(r.modifier).toBe(3);
+    expect(r.total).toBe(r.rolls[0]! + r.rolls[1]! + 3);
+  });
+  it("parses dM and NdM-K", () => {
+    expect(roll("d20", seededRng(1)).rolls).toHaveLength(1);
+    const r = roll("3d4-2", seededRng(9));
+    expect(r.modifier).toBe(-2);
+    expect(r.total).toBe(r.rolls.reduce((a, b) => a + b, 0) - 2);
+  });
+  it("rejects garbage", () => {
+    for (const bad of ["", "banana", "0d6", "2d", "d", "101d6", "2d6+", "1e5"])
+      expect(() => roll(bad, seededRng(1)), bad).toThrow();
+  });
+});
+
+describe("abilityModifier", () => {
+  it("matches the 5e table", () => {
+    expect(abilityModifier(1)).toBe(-5);
+    expect(abilityModifier(8)).toBe(-1);
+    expect(abilityModifier(10)).toBe(0);
+    expect(abilityModifier(11)).toBe(0);
+    expect(abilityModifier(16)).toBe(3);
+    expect(abilityModifier(20)).toBe(5);
+  });
+});
+
+describe("skillModifier", () => {
+  it("adds proficiency only when proficient", () => {
+    // rogue: DEX 16 (+3), proficient in Stealth (+2 prof) = +5
+    expect(skillModifier(rogue, "Stealth")).toBe(5);
+    // rogue: WIS 12 (+1), not proficient in Survival = +1
+    expect(skillModifier(rogue, "Survival")).toBe(1);
+  });
+});
+
+describe("d20 advantage/disadvantage", () => {
+  it("advantage takes max, disadvantage takes min", () => {
+    for (let seed = 0; seed < 50; seed++) {
+      const adv = d20(seededRng(seed), "advantage");
+      expect(adv.die).toBe(Math.max(...adv.raw));
+      const dis = d20(seededRng(seed), "disadvantage");
+      expect(dis.die).toBe(Math.min(...dis.raw));
+    }
+  });
+});
+
+describe("resolveCheck", () => {
+  const check: CheckRequest = { playerName: "Kira", skill: "Stealth", dc: 12, reason: "sneak past the guard" };
+
+  it("computes total = die + modifier and compares to DC", () => {
+    for (let seed = 0; seed < 200; seed++) {
+      const r = resolveCheck(rogue, check, seededRng(seed));
+      expect(r.total).toBe(r.die + r.modifier);
+      expect(r.modifier).toBe(5);
+      if (r.critical === "none") expect(r.success).toBe(r.total >= 12);
+    }
+  });
+
+  it("natural 20 always succeeds, natural 1 always fails", () => {
+    let saw20 = false, saw1 = false;
+    for (let seed = 0; seed < 500 && !(saw20 && saw1); seed++) {
+      const r = resolveCheck(rogue, { ...check, dc: 30 }, seededRng(seed));
+      if (r.die === 20) { expect(r.success).toBe(true); expect(r.critical).toBe("success"); saw20 = true; }
+      const r2 = resolveCheck(rogue, { ...check, dc: 5 }, seededRng(seed));
+      if (r2.die === 1) { expect(r2.success).toBe(false); expect(r2.critical).toBe("failure"); saw1 = true; }
+    }
+    expect(saw20).toBe(true);
+    expect(saw1).toBe(true);
+  });
+});
+
+describe("damage & healing", () => {
+  it("clamps at 0 and maxHp and never mutates the input", () => {
+    const hurt = applyDamage(rogue, 9999);
+    expect(hurt.hp).toBe(0);
+    expect(rogue.hp).toBe(rogue.maxHp); // untouched
+    const healed = heal(hurt, 9999);
+    expect(healed.hp).toBe(rogue.maxHp);
+    expect(applyDamage(rogue, -5).hp).toBe(rogue.hp); // negative damage is ignored
+  });
+});
+
+describe("pregen party", () => {
+  it("all pregens are internally consistent", () => {
+    for (const c of PREGEN_CHARACTERS) {
+      expect(c.hp).toBe(c.maxHp);
+      expect(c.level).toBe(3);
+      expect(c.proficiencyBonus).toBe(2);
+      expect(Object.keys(c.abilities)).toHaveLength(6);
+    }
+  });
+});

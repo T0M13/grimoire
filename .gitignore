@@ -1,0 +1,29 @@
+# JavaScript dependencies and build output
+node_modules/
+**/node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Local AI runtimes and downloaded model weights (recreated by setup.ps1)
+vendor/
+
+# Campaign databases, generated images/audio, and setup state
+var/
+
+# Generated benchmark artifacts
+spikes/tts/*.wav
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Logs and editor/OS files
+*.log
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

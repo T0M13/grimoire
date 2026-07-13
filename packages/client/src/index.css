@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+:root {
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+}
+
+body {
+  background: #0b0a09;
+  color: #e8e0d0;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  overflow: hidden;
+}
+
+.narration {
+  font-family: var(--serif);
+}
+
+/* slow Ken Burns drift so the scene always feels alive */
+@keyframes kenburns {
+  0%   { transform: scale(1.02) translate(0, 0); }
+  50%  { transform: scale(1.10) translate(-1.5%, -1%); }
+  100% { transform: scale(1.02) translate(0, 0); }
+}
+.kenburns { animation: kenburns 45s ease-in-out infinite; }
+
+@keyframes fadein { from { opacity: 0 } to { opacity: 1 } }
+.fadein { animation: fadein 1.8s ease-out; }
+.fadein-fast { animation: fadein 0.3s ease-out; }
+
+/* thinking indicator: three ember dots */
+@keyframes ember { 0%, 100% { opacity: .25 } 50% { opacity: 1 } }
+.ember span { animation: ember 1.2s infinite; }
+.ember span:nth-child(2) { animation-delay: .2s }
+.ember span:nth-child(3) { animation-delay: .4s }
+
+/* dice result pop */
+@keyframes dicepop {
+  0% { transform: scale(0.3) rotate(-18deg); opacity: 0 }
+  60% { transform: scale(1.15) rotate(4deg); opacity: 1 }
+  100% { transform: scale(1) rotate(0) }
+}
+.dicepop { animation: dicepop .5s cubic-bezier(.2,1.6,.4,1) }
+
+::-webkit-scrollbar { width: 6px }
+::-webkit-scrollbar-thumb { background: #4a4237; border-radius: 3px }
+::-webkit-scrollbar-track { background: transparent }
