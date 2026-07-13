@@ -122,12 +122,17 @@ presentation layer reacts *during* play:
 
 ## 8. Music & sound
 
-- **No live music generation** (too slow / VRAM-hungry). Instead: a **mood-tagged library**
-  pre-generated offline with ACE-Step (already running locally) — tavern, travel, forest,
-  dungeon, tension, combat, boss, sorrow, victory, mystery, town, night. ~3–5 tracks per mood,
-  loopable, crossfaded on mood change. The DM emits `set_mood("combat_boss")` as a tool call.
-- SFX one-shots (dice, sword hit, level-up chime, door creak) from a small static library.
-- New moods/tracks can be batch-generated between sessions — never during play.
+- The shipped MVP uses a **procedural browser soundscape** for tavern, travel, forest, dungeon,
+  tension, combat, boss, sorrow, victory, mystery, town, and night. It starts after the first user
+  gesture, loops without downloads, and crossfades whenever authoritative scene mood changes.
+- Combat and boss moods use faster, percussive arrangements. The constrained DM move can emit an
+  optional mood when a fight starts, a boss arrives, victory lands, or tension passes.
+- Synthesized one-shots cover UI, choices, scene changes, checks, success/failure, combat stings,
+  and system events. Narrator, music, and effects have independent persisted controls.
+- All sound is tab-local: closing or navigating away closes the Web Audio graph. A remote Linux
+  host never plays game audio; each connected browser does.
+- An offline ACE-Step mood library remains an optional quality upgrade. Authored loops can replace
+  procedural profiles behind the same mood contract; generation must never block play.
 
 ## 9. Story generation & memory
 

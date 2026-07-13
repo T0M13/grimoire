@@ -55,7 +55,9 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
   config in `config.ts` (ports, models, style prompts).
 - `packages/client` — React/Vite/Tailwind v4. One screen: join → story. `CharacterCreator.tsx`
   owns the compact guided SRD flow; `useGame.ts` owns the
-  socket, reconnection, and the sequential narration-audio queue. `App.tsx` includes SRD point-buy
+  socket, reconnection, and the sequential narration-audio queue. `useSoundscape.ts` owns the
+  tab-local Web Audio music/SFX graph, mood crossfades, cue routing, and persisted controls.
+  `App.tsx` includes SRD point-buy
   creation, class skill choices, randomized legal builds, full skill/save sheet views, and settings.
   `SceneArt` crossfades new art behind the story; presentation never blocks input.
 - Sidecars (HTTP, may be down — text-only mode must always work):
@@ -86,6 +88,9 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
 - LLM tool calls use constrained decoding — never regex-parse free text for mechanics.
 - New DM capabilities = extend `DmMove` + `DM_MOVE_JSON_SCHEMA` in `shared`, handle in
   `game.ts` `onAction`, add narration guidance in `prompts/dm-system.md`. Keep moves small.
+- Keep music and effects non-blocking, browser-local, and disposable on `pagehide`. Scene mood is
+  authoritative; the DM may provide optional `DmMove.mood` when tone changes. Preserve the 12 mood
+  keys so authored tracks can later replace procedural profiles without a protocol migration.
 - Asset cache keys include location name/kind/time/weather/mood plus a hash of the composition
   prompt, joined with `--`, lowercase alnum+dash only (Windows-safe filenames).
 - Narration for an active character must be second-person (`you/your`), never their own name or

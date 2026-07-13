@@ -226,7 +226,7 @@ export default function CharacterCreator({ onJoin, connected }: { onJoin: (paylo
       <button type="button" onClick={randomizeEverything} className="w-full rounded-xl border border-stone-700 text-stone-300 hover:border-amber-600/60 hover:text-amber-200 py-2 text-sm transition mb-4">Randomize Everything</button>
 
       <div className="grid grid-cols-6 gap-1 mb-5" role="tablist" aria-label="Character Creation Steps">
-        {TABS.map((label, index) => <button type="button" key={label} role="tab" aria-selected={tab === index} onClick={() => setTab(index)} className={`rounded-lg border px-1 py-2 text-[10px] md:text-xs transition ${tab === index ? "border-amber-500/80 bg-amber-950/40 text-amber-200" : "border-stone-800 bg-stone-900/50 text-stone-500 hover:border-stone-600"}`}><span className="hidden md:inline">{index + 1}. </span>{label}</button>)}
+        {TABS.map((label, index) => <button type="button" key={label} role="tab" data-sfx="choice" aria-selected={tab === index} onClick={() => setTab(index)} className={`rounded-lg border px-1 py-2 text-[10px] md:text-xs transition ${tab === index ? "border-amber-500/80 bg-amber-950/40 text-amber-200" : "border-stone-800 bg-stone-900/50 text-stone-500 hover:border-stone-600"}`}><span className="hidden md:inline">{index + 1}. </span>{label}</button>)}
       </div>
 
       <div className="min-h-[430px]">
@@ -311,18 +311,18 @@ function OptionGrid({ columns, children }: { columns: string; children: ReactNod
 }
 
 function ChoiceCard({ selected, title, text, onClick }: { selected: boolean; title: string; text: string; onClick: () => void }) {
-  return <button type="button" onClick={onClick} className={`text-left rounded-xl border px-3 py-2 transition ${selected ? "border-amber-500/80 bg-amber-950/40" : "border-stone-700 bg-stone-900/60 hover:border-stone-500"}`}><div className={`text-sm font-medium ${selected ? "text-amber-200" : "text-stone-300"}`}>{title}</div><div className="text-[11px] text-stone-500 mt-0.5 leading-tight normal-case">{text}</div></button>;
+  return <button type="button" data-sfx="choice" aria-pressed={selected} onClick={onClick} className={`text-left rounded-xl border px-3 py-2 transition ${selected ? "border-amber-500/80 bg-amber-950/40" : "border-stone-700 bg-stone-900/60 hover:border-stone-500"}`}><div className={`text-sm font-medium ${selected ? "text-amber-200" : "text-stone-300"}`}>{title}</div><div className="text-[11px] text-stone-500 mt-0.5 leading-tight normal-case">{text}</div></button>;
 }
 
 function ChoicePills<T extends string>({ title, options, selected, limit, onChange }: { title: string; options: readonly T[]; selected: T[]; limit: number; onChange: (items: T[]) => void }) {
   return <div className="mt-4"><div className="text-xs text-stone-400 mb-2">{title} · {selected.length}/{limit}</div><div className="flex flex-wrap gap-1.5">{options.map(option => {
     const active = selected.includes(option);
-    return <button type="button" key={option} onClick={() => onChange(active ? selected.filter(item => item !== option) : selected.length < limit ? [...selected, option] : selected)} className={`rounded-full border px-2.5 py-1 text-xs transition ${active ? "border-amber-500/80 bg-amber-950/50 text-amber-200" : "border-stone-700 text-stone-400 hover:border-stone-500"}`}>{option}</button>;
+    return <button type="button" key={option} data-sfx="choice" aria-pressed={active} onClick={() => onChange(active ? selected.filter(item => item !== option) : selected.length < limit ? [...selected, option] : selected)} className={`rounded-full border px-2.5 py-1 text-xs transition ${active ? "border-amber-500/80 bg-amber-950/50 text-amber-200" : "border-stone-700 text-stone-400 hover:border-stone-500"}`}>{option}</button>;
   })}</div></div>;
 }
 
 function Segmented<T extends string>({ value, options, set }: { value: T; options: readonly T[]; set: (value: T) => void }) {
-  return <div className={`grid gap-1 ${options.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>{options.map(option => <button type="button" key={option} onClick={() => set(option)} className={`rounded-xl border py-2 text-sm capitalize ${value === option ? "border-amber-500/80 bg-amber-950/40 text-amber-200" : "border-stone-700 text-stone-400"}`}>{option}</button>)}</div>;
+  return <div className={`grid gap-1 ${options.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>{options.map(option => <button type="button" key={option} data-sfx="choice" aria-pressed={value === option} onClick={() => set(option)} className={`rounded-xl border py-2 text-sm capitalize ${value === option ? "border-amber-500/80 bg-amber-950/40 text-amber-200" : "border-stone-700 text-stone-400"}`}>{option}</button>)}</div>;
 }
 
 function FieldLabel({ children }: { children: ReactNode }) {

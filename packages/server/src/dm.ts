@@ -61,6 +61,9 @@ const MOVE_INSTRUCTION = `ENGINE: Choose your next DM move for the situation abo
   the current story hook rather than an empty generic landscape. Use physical descriptions, not
   character names, and include no signs, captions, or written text.
 - "give_item": a player just legitimately obtained a specific item. Fill "item".
+Set optional "mood" when the scene's emotional state changes. Use "combat" when a fight
+starts, "boss" for a climactic enemy, "victory" when a major encounter ends, and return to the
+best fitting ambient mood after danger passes. Omit it when the mood has not changed.
 Always fill "suggestedActions" with 3 short, distinct things players could plausibly try next (imperative, max 6 words each).`;
 
 /** Pass 1: constrained decision. Guaranteed-parseable; one retry on semantic invalidity. */

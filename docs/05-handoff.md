@@ -14,6 +14,8 @@ The creator is split into compact tabs and can randomize a complete legal build.
 generate a custom portrait, begin
 a campaign, act through free text or suggestions, make deterministic skill checks, hear streamed
 Kokoro narration, see asynchronous scene art, inspect character sheets, and resume from SQLite.
+After the first browser gesture, a procedural soundtrack follows scene mood and sound cues react
+to choices, location changes, checks, results, combat, and system events.
 
 The game supports multiple browser clients on one authoritative WebSocket room, but the full
 multiplayer lobby/seat/spotlight feature set remains Phase 3 work.
@@ -37,6 +39,9 @@ multiplayer lobby/seat/spotlight feature set remains Phase 3 work.
   specify indoor/outdoor context, visible NPCs, and their physical action in the current hook.
 - Kokoro CUDA narration using `bm_fable` (male) and `af_heart` (female).
 - Per-tab mute, volume, and pause/resume. Muting cuts the current sentence immediately.
+- Per-tab Web Audio soundscape covering all 12 scene moods with crossfades, percussive combat/boss
+  arrangements, and synthesized UI/choice/scene/roll/result/event cues. Music and effects each
+  have their own persisted mute/volume controls; no audio assets or server-side player are needed.
 - Table-wide narrator selection persisted in campaign state.
 - Continuous SQLite campaign persistence plus named host-local save/load/delete slots.
 - Disconnect autosave. Closing/disconnecting the final browser also aborts in-flight TTS.
@@ -87,6 +92,8 @@ from Git. They live under `vendor/` and `var/` and are reproducible or machine-l
 - `packages/server/src/media.ts`: scene/portrait ComfyUI workflows and streamed TTS helpers.
 - `packages/server/src/db.ts`: SQLite write-through campaign, event log, and save slots.
 - `packages/client/src/useGame.ts`: WebSocket/reconnect state and narration audio engine.
+- `packages/client/src/useSoundscape.ts`: tab-local music/SFX graph, mood profiles, cue routing,
+  persisted controls, first-gesture unlock, and page-close cleanup.
 - `packages/client/src/CharacterCreator.tsx`: guided SRD creator and final-sheet review.
 - `packages/client/src/App.tsx`: game screen, character sheet, and settings UI (the retired creator
   remains temporarily as unreachable code and should be removed during the next UI extraction).
@@ -102,7 +109,8 @@ from Git. They live under `vendor/` and `var/` and are reproducible or machine-l
 - `var/grimoire.db` is authoritative and is saved after resolved turns and client disconnects.
 - `var/assets/` holds generated scene, portrait, and narration files.
 - Named saves are snapshots in the same host-local SQLite database, not cloud saves.
-- Mute and volume are per browser tab/profile (`localStorage`). Narrator sex is table-wide state.
+- Narrator, music, and effects controls are per browser profile (`localStorage`). Narrator sex and
+  scene mood are table-wide authoritative state. Sound is rendered only in each open browser tab.
 - Clients send validated intents only. The server owns mechanics and mutable campaign state.
 
 ## Validation
@@ -125,6 +133,8 @@ Current manual regression checklist:
 - Open your own and another party member's sheet.
 - Switch narrator sex and verify the next sentence uses the selected voice.
 - During narration: pause, resume, change volume, then mute mid-sentence.
+- In Settings, independently mute and adjust music/effects; confirm the Now Playing label matches
+  the scene, choices click, a requested roll cues, and combat/boss mood changes the arrangement.
 - Create a named save, start a new game, load the save, and verify hero/story/voice restoration.
 - Close the final browser during narration; verify audio stops and reopening restores state.
 
@@ -132,5 +142,5 @@ Current manual regression checklist:
 
 The roadmap remains authoritative. The most immediate incomplete Phase 1/2 items are compact
 selectors for remaining level-1 class/spell choices, the broader SRD data import, starter scene-art
-pregeneration, music, and 3D dice.
+pregeneration, an optional authored music library, and 3D dice.
 Do not confuse these planned features with defects in the current vertical slice.

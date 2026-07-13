@@ -36,6 +36,8 @@ The game is fun for ONE player with text + voice only.
 - [x] Save/resume campaign (survives server restart + page refresh); session summaries pending
 - [x] Settings: table-wide narrator choice, per-tab audio controls, named local save slots,
   disconnect autosave, new-game/load flow, and hidden process lifecycle with last-tab cleanup
+- [x] Tab-local procedural soundscape: 12 mood profiles, crossfades, combat/boss arrangements,
+  UI/choice/scene/roll/result/event cues, and independent music/effects controls
 - **Playtest gate:** can you enjoyably play 2 hours solo and resume next day? *(ready to try)*
 - Measured e2e (2026-07-13, clean GPU): action → first narration text **1.3 s**, opening
   scene art **2.3 s**, roll path verified (Stealth DC 13 requested by DM, engine-rolled).
@@ -45,7 +47,8 @@ The game is fun for ONE player with text + voice only.
 - [ ] Starter art library pregen script
 - Live scene presentation (crossfade-in, Ken Burns drift, dramatic-beat stings), spoken
   session-start recap (non-blocking)
-- Music mood library (ACE-Step batch tool + manifest) + crossfade player + `set_mood`
+- [x] Mood-driven crossfade player and optional DM mood changes (procedural MVP)
+- [ ] Optional ACE-Step authored music batch tool + manifest to replace procedural profiles
 - [x] Character portraits at creation; NPC portraits remain pending
 - 3D dice (dice-box) wired to roll requests
 

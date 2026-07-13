@@ -65,6 +65,12 @@ After the final browser tab disconnects, a 15-second reconnect grace period expi
 Grimoire-owned processes shut down automatically. Run `.\stop.ps1` for an immediate manual stop.
 An Ollama instance that was already running before Grimoire is deliberately left alone.
 
+Music and effects are generated locally by the browser after the first click (required by browser
+autoplay policy). Settings has independent narrator, music, and effects mute/volume controls.
+The soundtrack crossfades across all scene moods, with distinct combat and boss arrangements;
+closing the tab destroys its audio graph. No music files, audio service, or extra server package
+is required.
+
 ## Quickstart (Linux host/server)
 
 The Linux bootstrap supports current Debian/Ubuntu, Fedora, and Arch-family distributions on

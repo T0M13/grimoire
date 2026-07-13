@@ -229,6 +229,7 @@ export class GameRoom {
     try {
       const move = await decideMove(this.state, this.history, playerLine);
       this.state.suggestedActions = move.suggestedActions;
+      if (move.mood && move.move !== "change_scene") this.state.scene.mood = move.mood;
       let instruction = "ENGINE: Narrate the next story beat reacting to the last player action (2-4 sentences).";
 
       if (move.move === "request_check" && move.check) {
@@ -240,7 +241,10 @@ export class GameRoom {
         instruction = `ENGINE: The party arrives at ${move.scene.name}. Establish the new scene in 3-4 sentences: atmosphere, one sensory detail, and two things worth investigating.`;
       } else if (move.move === "give_item" && move.item) {
         const c = this.state.party.find(p => p.name.toLowerCase() === move.item!.playerName.toLowerCase());
-        if (c) c.inventory.push(move.item.item);
+        if (c) {
+          c.inventory.push(move.item.item);
+          this.pushLog("system", `${c.name} received ${move.item.item}.`);
+        }
         instruction = `ENGINE: ${move.item.playerName} obtains: ${move.item.item}. Weave it into the narration naturally (1-2 sentences).`;
       }
 

@@ -146,6 +146,7 @@ export type CheckIntent = z.infer<typeof CheckIntentSchema>;
 
 export const DmMoveSchema = z.object({
   move: z.enum(["narrate", "request_check", "change_scene", "give_item"]),
+  mood: MoodSchema.optional(),
   check: CheckIntentSchema.optional(),
   scene: z
     .object({
@@ -168,6 +169,7 @@ export const DM_MOVE_JSON_SCHEMA = {
   type: "object",
   properties: {
     move: { type: "string", enum: ["narrate", "request_check", "change_scene", "give_item"] },
+    mood: { type: "string", enum: [...MOODS] },
     check: {
       type: "object",
       properties: {

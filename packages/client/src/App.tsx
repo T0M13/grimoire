@@ -8,6 +8,7 @@ import {
   type Ability, type AbilityScores, type Character, type Skill,
 } from "@grimoire/shared";
 import { assetUrl, useGame } from "./useGame";
+import { useSoundscape, type SoundscapeControls } from "./useSoundscape";
 import CharacterCreator from "./CharacterCreator";
 
 const mod = (score: number) => Math.floor((score - 10) / 2);
@@ -23,6 +24,7 @@ const CLASSES = [
 
 export default function App() {
   const game = useGame();
+  const sound = useSoundscape(game.state, game.lastRoll);
   const me = localStorage.getItem("grimoire.player");
   const myName: string | null = me ? (JSON.parse(me).playerName as string) : null;
   // case-insensitive: the server matches names case-insensitively on reattach
@@ -30,7 +32,7 @@ export default function App() {
 
   if (!game.state) return <Center><Embers text="Reaching the storyteller" /></Center>;
   if (!joined) return <CharacterCreator onJoin={p => game.send({ type: "join", ...p })} connected={game.connected} />;
-  return <GameScreen {...{ game, myName: myName! }} />;
+  return <GameScreen {...{ game, myName: myName!, sound }} />;
 }
 
 // ---------------- join ----------------
@@ -222,7 +224,7 @@ function JoinScreen({ onJoin, connected }: { onJoin: (p: JoinPayload) => void; c
 
 // ---------------- game ----------------
 
-function GameScreen({ game, myName }: { game: ReturnType<typeof useGame>; myName: string }) {
+function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>; myName: string; sound: SoundscapeControls }) {
   const [input, setInput] = useState("");
   const [premise, setPremise] = useState("");
   const [sheetFor, setSheetFor] = useState<string | null>(null); // character id
@@ -251,7 +253,7 @@ function GameScreen({ game, myName }: { game: ReturnType<typeof useGame>; myName
           {state.scene.exits.length > 0 && (
             <div className="hidden md:flex gap-2">
               {state.scene.exits.map(e => (
-                <button key={e} onClick={() => act(`We head to ${e}.`)}
+                <button key={e} data-sfx="choice" onClick={() => act(`We head to ${e}.`)}
                   className="px-2.5 py-1 rounded-full border border-stone-600/60 bg-black/40 hover:border-amber-500/60 text-xs">
                   {e}
                 </button>
@@ -276,7 +278,7 @@ function GameScreen({ game, myName }: { game: ReturnType<typeof useGame>; myName
       </div>
 
       {sheetCharacter && <SheetDrawer c={sheetCharacter} onClose={() => setSheetFor(null)} />}
-      {settingsOpen && <SettingsPanel game={game} onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <SettingsPanel game={game} sound={sound} onClose={() => setSettingsOpen(false)} />}
 
       {/* party rail */}
       <div className="absolute left-4 bottom-40 md:bottom-32 flex flex-col gap-2">
@@ -330,7 +332,7 @@ function GameScreen({ game, myName }: { game: ReturnType<typeof useGame>; myName
             {state.suggestedActions.length > 0 && !state.dmBusy && (
               <div className="flex flex-wrap justify-center gap-2">
                 {state.suggestedActions.map(s => (
-                  <button key={s} onClick={() => act(s)}
+                  <button key={s} data-sfx="choice" onClick={() => act(s)}
                     className="px-3 py-1.5 rounded-full border border-stone-600/70 bg-black/50 hover:border-amber-500/70 text-sm text-stone-200">
                     {s}
                   </button>
@@ -555,7 +557,7 @@ function SheetDrawer({ c, onClose }: { c: Character; onClose: () => void }) {
   );
 }
 
-function SettingsPanel({ game, onClose }: { game: ReturnType<typeof useGame>; onClose: () => void }) {
+function SettingsPanel({ game, sound, onClose }: { game: ReturnType<typeof useGame>; sound: SoundscapeControls; onClose: () => void }) {
   const [slotName, setSlotName] = useState("");
   const state = game.state!;
   return (
@@ -582,9 +584,38 @@ function SettingsPanel({ game, onClose }: { game: ReturnType<typeof useGame>; on
         ))}
       </div>
       <label className="block mb-6">
-        <span className="text-xs text-stone-500">Volume</span>
+        <span className="text-xs text-stone-500">Narrator Volume</span>
         <input type="range" min={0} max={1} step={0.05} value={game.audio.volume}
           onChange={e => game.audio.setVolume(Number(e.target.value))}
+          className="w-full accent-amber-600" />
+      </label>
+
+      <SectionTitle>Soundscape</SectionTitle>
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <button onClick={() => sound.setMusicMuted(!sound.musicMuted)}
+          className={`rounded-xl border py-2 text-sm transition ${sound.musicMuted ? "border-stone-700 text-stone-500" : "border-amber-600/60 text-amber-200 bg-amber-950/30"}`}>
+          {sound.musicMuted ? "Music Off" : "Music On"}
+        </button>
+        <button onClick={() => sound.setEffectsMuted(!sound.effectsMuted)}
+          className={`rounded-xl border py-2 text-sm transition ${sound.effectsMuted ? "border-stone-700 text-stone-500" : "border-amber-600/60 text-amber-200 bg-amber-950/30"}`}>
+          {sound.effectsMuted ? "Effects Off" : "Effects On"}
+        </button>
+      </div>
+      <div className="mb-3 rounded-xl border border-stone-800 bg-stone-900/55 px-3 py-2">
+        <div className="text-[10px] uppercase tracking-widest text-stone-600">Now Playing</div>
+        <div className="text-sm text-stone-300">{sound.trackLabel}</div>
+        <div className="text-[11px] capitalize text-stone-600">{sound.mood} scene</div>
+      </div>
+      <label className={`block mb-3 ${sound.musicMuted ? "opacity-45" : ""}`}>
+        <span className="text-xs text-stone-500">Music Volume</span>
+        <input type="range" min={0} max={1} step={0.05} value={sound.musicVolume}
+          onChange={e => sound.setMusicVolume(Number(e.target.value))}
+          className="w-full accent-amber-600" />
+      </label>
+      <label className={`block mb-6 ${sound.effectsMuted ? "opacity-45" : ""}`}>
+        <span className="text-xs text-stone-500">Effects Volume</span>
+        <input type="range" min={0} max={1} step={0.05} value={sound.effectsVolume}
+          onChange={e => sound.setEffectsVolume(Number(e.target.value))}
           className="w-full accent-amber-600" />
       </label>
 
