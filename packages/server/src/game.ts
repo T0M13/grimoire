@@ -9,6 +9,7 @@ import { decideMove, narrate } from "./dm.js";
 import { generatePortrait, getSceneImage, SentenceStream, synthesize } from "./media.js";
 import { deleteSlot, listSaves, loadCampaign, loadSlot, logEvent, saveCampaign, saveSlot } from "./db.js";
 import type { ChatMessage } from "./ollama.js";
+import { IdleShutdown } from "./lifecycle.js";
 
 const OPENING_INSTRUCTION = (premise: string, party: string) =>
   `ENGINE: Begin a brand-new adventure for this party: ${party}.
@@ -48,9 +49,15 @@ export class GameRoom {
   private audioEpoch = 0;
   private audioSeq = 0;
   private rng: Rng;
+  private idleShutdown: IdleShutdown;
 
-  constructor(rng?: Rng) {
-    this.rng = rng ?? seededRng(crypto.randomBytes(4).readUInt32LE(0));
+  get clientCount(): number {
+    return this.clients.size;
+  }
+
+  constructor(options: { rng?: Rng; onIdle?: () => void; idleShutdownMs?: number } = {}) {
+    this.rng = options.rng ?? seededRng(crypto.randomBytes(4).readUInt32LE(0));
+    this.idleShutdown = new IdleShutdown(options.idleShutdownMs ?? 15_000, options.onIdle ?? (() => {}));
     const saved = loadCampaign();
     this.state = saved?.state ?? defaultState();
     this.history = saved?.history ?? [];
@@ -63,6 +70,7 @@ export class GameRoom {
   // ---------- connection lifecycle ----------
 
   addClient(ws: WebSocket): void {
+    this.idleShutdown.clientConnected();
     this.clients.set(ws, "");
     this.send(ws, { type: "state", state: this.state });
   }
@@ -72,6 +80,7 @@ export class GameRoom {
     if (this.clients.size === 0) {
       // Stop an in-flight sidecar request as well as skipping anything still queued.
       this.cancelAudio(false);
+      this.idleShutdown.roomBecameEmpty();
     }
     // autosave the moment someone leaves; nothing is ever lost to a closed tab
     this.persist();
@@ -334,6 +343,13 @@ export class GameRoom {
     this.audioAbort?.abort();
     this.audioAbort = null;
     if (notifyClients) this.broadcast({ type: "audio_stop" });
+  }
+
+  /** Graceful host shutdown: persist the final snapshot and stop optional media work. */
+  shutdown(): void {
+    this.idleShutdown.cancel();
+    this.cancelAudio(false);
+    this.persist();
   }
 
   private applyScene(scene: NonNullable<import("@grimoire/shared").DmMove["scene"]>): void {

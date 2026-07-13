@@ -22,13 +22,15 @@ multiplayer lobby/seat/spotlight feature set remains Phase 3 work.
 - Background portrait generation with a `?` placeholder until the image is ready.
 - Clickable party badges and a character-sheet drawer for every party member.
 - Constrained two-pass AI DM: structured move selection, then streamed narration.
-- Deterministic rules engine for dice, skill checks, damage, and healing; 20 unit tests currently.
+- Deterministic rules engine for dice, skill checks, damage, and healing; automated test suite.
 - Async ComfyUI scene art with scene-signature caching and crossfade presentation.
 - Kokoro CUDA narration using `bm_fable` (male) and `af_heart` (female).
 - Per-tab mute, volume, and pause/resume. Muting cuts the current sentence immediately.
 - Table-wide narrator selection persisted in campaign state.
 - Continuous SQLite campaign persistence plus named host-local save/load/delete slots.
 - Disconnect autosave. Closing/disconnecting the final browser also aborts in-flight TTS.
+- Hidden host supervisor with per-service logs and automatic cleanup 15 seconds after the final
+  browser disconnects; reconnecting during the grace period cancels shutdown.
 - New-game flow that keeps named saves and the selected narrator available.
 
 ## Fresh-clone setup
@@ -56,7 +58,9 @@ from Git. They live under `vendor/` and `var/` and are reproducible or machine-l
 - `packages/client/src/useGame.ts`: WebSocket/reconnect state and narration audio engine.
 - `packages/client/src/App.tsx`: character creation, game screen, sheet, and settings UI.
 - `setup.ps1`: reproducible local runtime/model bootstrap.
-- `start.ps1`: one-command setup and launcher.
+- `start.ps1`: one-command setup and hidden-host launcher.
+- `stop.ps1`: authenticated localhost shutdown with process-tree fallback.
+- `tools/host/supervisor.ps1`: owns Grimoire processes, logs, and lifecycle cleanup.
 
 ## Persistence and control boundaries
 

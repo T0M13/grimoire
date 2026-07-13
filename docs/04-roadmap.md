@@ -31,7 +31,7 @@ The game is fun for ONE player with text + voice only.
 - [x] Scene-graph movement with clickable exits
 - [x] Save/resume campaign (survives server restart + page refresh); session summaries pending
 - [x] Settings: table-wide narrator choice, per-tab audio controls, named local save slots,
-  disconnect autosave, and new-game/load flow
+  disconnect autosave, new-game/load flow, and hidden process lifecycle with last-tab cleanup
 - **Playtest gate:** can you enjoyably play 2 hours solo and resume next day? *(ready to try)*
 - Measured e2e (2026-07-13, clean GPU): action → first narration text **1.3 s**, opening
   scene art **2.3 s**, roll path verified (Stealth DC 13 requested by DM, engine-rolled).

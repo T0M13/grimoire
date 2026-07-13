@@ -59,6 +59,8 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
 
 - `npm test` (vitest, all packages) · `npm run typecheck` (tsc strict, whole repo)
 - Fresh clone/readiness: `.\start.ps1` installs then launches · `.\setup.ps1 -Check` is read-only
+- Host lifecycle: services are hidden and supervised; `.\stop.ps1` stops immediately, while the
+  final browser disconnect triggers automatic cleanup after a 15-second reconnect grace period.
 - `npm run dev:server` (:7777) · `npm run dev:client` (Vite :5173, `--host` for LAN)
 - Sidecars: `powershell spikes/run-comfy.ps1` · `vendor\ComfyUI\venv\Scripts\python.exe tools\tts-sidecar\server.py`
 - E2E: `node spikes/e2e-smoke.mjs` (drives join → campaign → action → roll over ws)

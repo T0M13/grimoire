@@ -2,8 +2,24 @@
 # Starts: Ollama (if not running) + ComfyUI + Kokoro TTS + game server + web client.
 # Play at http://localhost:5173  (friends on your LAN/Tailscale: http://<your-ip>:5173)
 
+$ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 $setup = Join-Path $root "setup.ps1"
+$supervisor = Join-Path $root "tools\host\supervisor.ps1"
+$statePath = Join-Path $root "var\grimoire-host.json"
+$logDir = Join-Path $root "var\logs"
+
+if (Test-Path $statePath) {
+  try {
+    $state = Get-Content -Raw $statePath | ConvertFrom-Json
+    if (Get-Process -Id $state.supervisorPid -ErrorAction SilentlyContinue) {
+      Write-Host "Grimoire is already running in the background." -ForegroundColor Green
+      Write-Host "Play at http://localhost:5173" -ForegroundColor Cyan
+      exit 0
+    }
+  } catch { }
+  Remove-Item -LiteralPath $statePath -Force -ErrorAction SilentlyContinue
+}
 
 # A fresh clone has only source code. Bootstrap local runtimes, packages, and model files.
 try {
@@ -15,30 +31,38 @@ try {
   exit 1
 }
 
-$venvPy = Join-Path $root "vendor\ComfyUI\venv\Scripts\python.exe"
-
-function Start-IfDown($name, $url, $script) {
-  try {
-    Invoke-RestMethod -Uri $url -TimeoutSec 2 | Out-Null
-    Write-Host "[OK]   $name already running" -ForegroundColor Green
-  } catch {
-    Write-Host "[BOOT] $name..." -ForegroundColor Yellow
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", $script -WindowStyle Minimized
-  }
-}
-
 Write-Host ""
 Write-Host "  GRIMOIRE" -ForegroundColor DarkYellow
 Write-Host "  --------" -ForegroundColor DarkYellow
 
-# Ollama usually runs as a service; poke it so the model can preload
-Start-IfDown "Ollama"      "http://127.0.0.1:11434/api/tags"   "ollama serve"
-Start-IfDown "ComfyUI"     "http://127.0.0.1:8188/system_stats" "& '$venvPy' '$root\vendor\ComfyUI\main.py' --port 8188 --disable-auto-launch"
-Start-IfDown "Narrator"    "http://127.0.0.1:7861/health"       "& '$venvPy' '$root\tools\tts-sidecar\server.py'"
-Start-IfDown "Game server" "http://127.0.0.1:7777/health"       "Set-Location '$root'; npm run dev:server"
-Start-IfDown "Web client"  "http://127.0.0.1:5173"              "Set-Location '$root'; npm run dev:client"
+New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+$supervisorOut = Join-Path $logDir "supervisor.log"
+$supervisorErr = Join-Path $logDir "supervisor.error.log"
+$hostProcess = Start-Process powershell.exe `
+  -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$supervisor`"", "-Root", "`"$root`"") `
+  -WindowStyle Hidden -RedirectStandardOutput $supervisorOut -RedirectStandardError $supervisorErr -PassThru
+
+$ready = $false
+for ($i = 0; $i -lt 120 -and -not $ready; $i++) {
+  try {
+    Invoke-RestMethod -Uri "http://127.0.0.1:7777/health" -TimeoutSec 2 | Out-Null
+    Invoke-RestMethod -Uri "http://127.0.0.1:5173" -TimeoutSec 2 | Out-Null
+    $ready = $true
+  } catch {
+    if ($hostProcess.HasExited) { break }
+    Start-Sleep -Seconds 1
+  }
+}
+
+if (-not $ready) {
+  Write-Host "Background host failed to start. See var\logs\supervisor.error.log" -ForegroundColor Red
+  if (Test-Path $supervisorErr) { Get-Content $supervisorErr -Tail 10 }
+  exit 1
+}
 
 Write-Host ""
-Write-Host "  When all windows are up: play at http://localhost:5173" -ForegroundColor Cyan
+Write-Host "  Running quietly in the background: http://localhost:5173" -ForegroundColor Cyan
+Write-Host "  Closing the final browser tab stops the stack after 15 seconds." -ForegroundColor DarkGray
+Write-Host "  Manual stop: .\stop.ps1   Logs: var\logs\" -ForegroundColor DarkGray
 Write-Host "  Reset the campaign: delete var\grimoire.db" -ForegroundColor DarkGray
 Write-Host ""

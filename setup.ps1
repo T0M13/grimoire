@@ -215,28 +215,35 @@ Ensure-Download "LCM-LoRA for SD 1.5" `
 
 # Start Ollama long enough to make sure the resident DM model is available.
 if ($ollama) {
-  if (-not (Test-Http "http://127.0.0.1:11434/api/tags")) {
-    if ($Check) {
-      Write-Host "[INFO] Ollama is installed but not currently running" -ForegroundColor DarkGray
-    } else {
-      Write-Host "[BOOT] Starting Ollama for model setup..." -ForegroundColor Yellow
-      Start-Process -FilePath $ollama -ArgumentList "serve" -WindowStyle Hidden
-      for ($i = 0; $i -lt 30 -and -not (Test-Http "http://127.0.0.1:11434/api/tags"); $i++) {
-        Start-Sleep -Seconds 1
+  $setupOllamaProcess = $null
+  try {
+    if (-not (Test-Http "http://127.0.0.1:11434/api/tags")) {
+      if ($Check) {
+        Write-Host "[INFO] Ollama is installed but not currently running" -ForegroundColor DarkGray
+      } else {
+        Write-Host "[BOOT] Starting Ollama for model setup..." -ForegroundColor Yellow
+        $setupOllamaProcess = Start-Process -FilePath $ollama -ArgumentList "serve" -WindowStyle Hidden -PassThru
+        for ($i = 0; $i -lt 30 -and -not (Test-Http "http://127.0.0.1:11434/api/tags"); $i++) {
+          Start-Sleep -Seconds 1
+        }
+        if (-not (Test-Http "http://127.0.0.1:11434/api/tags")) { throw "Ollama did not start." }
       }
-      if (-not (Test-Http "http://127.0.0.1:11434/api/tags")) { throw "Ollama did not start." }
     }
-  }
-  if (Test-Http "http://127.0.0.1:11434/api/tags") {
-    $models = (& $ollama list | Out-String)
-    if ($models -match "(?m)^llama3\.1:8b\s") {
-      Write-Host "[OK]   Ollama model llama3.1:8b" -ForegroundColor Green
-    } elseif ($Check) {
-      Write-Host "[MISS] Ollama model llama3.1:8b" -ForegroundColor Yellow
-    } else {
-      Write-Host "[GET]  Pulling Ollama model llama3.1:8b (large one-time download)..." -ForegroundColor Yellow
-      & $ollama pull llama3.1:8b
-      if ($LASTEXITCODE -ne 0) { throw "Could not pull llama3.1:8b." }
+    if (Test-Http "http://127.0.0.1:11434/api/tags") {
+      $models = (& $ollama list | Out-String)
+      if ($models -match "(?m)^llama3\.1:8b\s") {
+        Write-Host "[OK]   Ollama model llama3.1:8b" -ForegroundColor Green
+      } elseif ($Check) {
+        Write-Host "[MISS] Ollama model llama3.1:8b" -ForegroundColor Yellow
+      } else {
+        Write-Host "[GET]  Pulling Ollama model llama3.1:8b (large one-time download)..." -ForegroundColor Yellow
+        & $ollama pull llama3.1:8b
+        if ($LASTEXITCODE -ne 0) { throw "Could not pull llama3.1:8b." }
+      }
+    }
+  } finally {
+    if ($setupOllamaProcess -and -not $setupOllamaProcess.HasExited) {
+      Stop-Process -Id $setupOllamaProcess.Id -Force -ErrorAction SilentlyContinue
     }
   }
 }

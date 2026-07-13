@@ -13,11 +13,28 @@ const MIME: Record<string, string> = {
   ".mp3": "audio/mpeg", ".ogg": "audio/ogg", ".json": "application/json",
 };
 
+let shuttingDown = false;
+
+function isLoopback(address: string | undefined): boolean {
+  return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
+}
+
 const server = http.createServer((req, res) => {
   const url = (req.url ?? "/").split("?")[0]!;
   if (url === "/health") {
     res.writeHead(200, { "content-type": "application/json", "access-control-allow-origin": "*" });
+    res.end(JSON.stringify({ ok: true, activeClients: room?.clientCount ?? 0 }));
+    return;
+  }
+  if (url === "/shutdown" && req.method === "POST") {
+    const expected = process.env.GRIMOIRE_SHUTDOWN_TOKEN;
+    const supplied = req.headers["x-grimoire-token"];
+    if (!expected || supplied !== expected || !isLoopback(req.socket.remoteAddress)) {
+      res.writeHead(403); res.end("Forbidden"); return;
+    }
+    res.writeHead(202, { "content-type": "application/json" });
     res.end(JSON.stringify({ ok: true }));
+    setImmediate(() => shutdown("manual stop"));
     return;
   }
   if (url === "/portrait") {
@@ -64,8 +81,23 @@ const server = http.createServer((req, res) => {
   res.end("Grimoire game server. Connect the client to ws://<host>:7777/ws");
 });
 
-const room = new GameRoom();
+const idleShutdownMs = Number(process.env.GRIMOIRE_IDLE_SHUTDOWN_MS ?? "15000");
+const room = new GameRoom({
+  idleShutdownMs: Number.isFinite(idleShutdownMs) ? Math.max(1_000, idleShutdownMs) : 15_000,
+  onIdle: () => shutdown("last browser disconnected"),
+});
 const wss = new WebSocketServer({ server, path: "/ws" });
+
+function shutdown(reason: string): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[host] shutting down: ${reason}`);
+  room.shutdown();
+  for (const ws of wss.clients) ws.close(1001, "Host session ended");
+  wss.close();
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 5_000);
+}
 
 wss.on("connection", ws => {
   room.addClient(ws);
@@ -91,3 +123,6 @@ server.listen(CONFIG.port, async () => {
   void warmUp().then(() => console.log("- DM brain warm"));
   console.log(`- ComfyUI: ${(await comfyAvailable()) ? "connected" : "NOT RUNNING (scene art disabled)"}`);
 });
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));

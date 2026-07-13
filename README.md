@@ -56,6 +56,11 @@ The Windows bootstrap installs missing Git, Node.js, Python, and Ollama through 
 It is idempotent, so later starts skip completed work. Expect roughly 10 GB of local downloads
 on the first run. Use `.\setup.ps1 -Check` for a read-only readiness report.
 
+All game services run without visible console windows and write diagnostics to `var/logs/`.
+After the final browser tab disconnects, a 15-second reconnect grace period expires and the
+Grimoire-owned processes shut down automatically. Run `.\stop.ps1` for an immediate manual stop.
+An Ollama instance that was already running before Grimoire is deliberately left alone.
+
 `npm test` runs the rules-engine/media suite;
 `node spikes/e2e-smoke.mjs` drives a full game turn against the live stack.
 Reset the campaign by deleting `var/grimoire.db`.
