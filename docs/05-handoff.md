@@ -59,6 +59,10 @@ Run `./setup.ps1 -Check` for a read-only readiness report. The first setup needs
 connection, roughly 10 GB of free disk space, and several minutes for model downloads. The target
 host is Windows 11 with an NVIDIA RTX 4070 12 GB; CPU narration remains possible but slower.
 
+Once Node/npm exists, the cross-platform convenience commands are `npm start`,
+`npm run start:persistent`, and `npm stop`. `tools/host/start.mjs` dispatches to the existing
+PowerShell or Bash launcher, so it does not duplicate lifecycle logic.
+
 Linux hosts run `./start.sh`; use `./start.sh --persistent` for an always-on server. `setup.sh`
 supports Debian/Ubuntu, Fedora, and Arch-family distributions on x86-64 and ARM64, provisions a
 local Node.js 22 runtime if necessary, and otherwise mirrors the Windows bootstrap. It selects

@@ -49,7 +49,8 @@ the campaign continues next weekend exactly where it stopped.
 ## Quickstart (Windows host)
 
 ```powershell
-.\start.ps1     # first run installs dependencies/models, then boots the full stack
+npm start        # when Node/npm is already installed
+# or .\start.ps1 # also bootstraps missing prerequisites on a fresh Windows machine
 # then open http://localhost:5173 — friends join via your LAN/Tailscale IP
 ```
 
@@ -58,7 +59,8 @@ The Windows bootstrap installs missing Git, Node.js, Python, and Ollama through 
 It is idempotent, so later starts skip completed work. Expect roughly 10 GB of local downloads
 on the first run. Use `.\setup.ps1 -Check` for a read-only readiness report.
 
-All game services run without visible console windows and write diagnostics to `var/logs/`.
+Use `npm stop` (or `.\stop.ps1`) for an immediate manual stop. All game services run without
+visible console windows and write diagnostics to `var/logs/`.
 After the final browser tab disconnects, a 15-second reconnect grace period expires and the
 Grimoire-owned processes shut down automatically. Run `.\stop.ps1` for an immediate manual stop.
 An Ollama instance that was already running before Grimoire is deliberately left alone.

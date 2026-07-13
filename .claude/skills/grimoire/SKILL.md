@@ -68,6 +68,8 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
 - `npm test` (vitest, all packages) · `npm run typecheck` (tsc strict, whole repo)
 - Fresh clone/readiness: Windows `.\start.ps1` / `.\setup.ps1 -Check`; Linux `./start.sh` /
   `./setup.sh --check`. Both bootstrap the local runtime/model stack idempotently.
+- Cross-platform convenience (after Node/npm exists): `npm start`, `npm run start:persistent`,
+  and `npm stop`; these dispatch to the platform launcher rather than duplicating host logic.
 - Host lifecycle: services are backgrounded and supervised; `.\stop.ps1` or `./stop.sh` stops
   immediately. Desktop mode cleans up after the final browser disconnect; Linux
   `./start.sh --persistent` (or Windows `.\start.ps1 -Persistent`) stays available as a server.

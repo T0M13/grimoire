@@ -7,6 +7,9 @@
     "packages/*"
   ],
   "scripts": {
+    "start": "node tools/host/start.mjs",
+    "start:persistent": "node tools/host/start.mjs --persistent",
+    "stop": "node tools/host/stop.mjs .",
     "dev:server": "npm -w @grimoire/server run dev",
     "dev:client": "npm -w @grimoire/client run dev",
     "test": "vitest run",
