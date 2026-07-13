@@ -43,6 +43,13 @@ multiplayer lobby/seat/spotlight feature set remains Phase 3 work.
   arrangements, and synthesized UI/choice/scene/roll/result/event cues. Music and effects each
   have their own persisted mute/volume controls; no audio assets or server-side player are needed.
 - Table-wide narrator selection persisted in campaign state.
+- Explicit Act, Speak, and Ask DM intent modes. Speak requires a substantive direct NPC response;
+  Ask DM yields a labeled out-of-character Storyteller/DM answer without advancing time.
+- Named NPCs receive a campaign-persistent Kokoro voice distinct from the narrator. Sex chooses the
+  pool and personality descriptors influence the stable selection; social-check reactions retain it.
+- Structured quest start/advance/complete/fail events, one opening main quest fallback, and a Quest
+  Journal with active/completed/failed presentation.
+- Inventory sheet cards group duplicates and use code-native category icons without binary assets.
 - Continuous SQLite campaign persistence plus named host-local save/load/delete slots.
 - Disconnect autosave. Closing/disconnecting the final browser also aborts in-flight TTS.
 - Cross-platform host supervisor with per-service logs and automatic cleanup 15 seconds after
@@ -94,6 +101,8 @@ from Git. They live under `vendor/` and `var/` and are reproducible or machine-l
 - `packages/client/src/useGame.ts`: WebSocket/reconnect state and narration audio engine.
 - `packages/client/src/useSoundscape.ts`: tab-local music/SFX graph, mood profiles, cue routing,
   persisted controls, first-gesture unlock, and page-close cleanup.
+- `packages/shared/src/index.ts`: also owns interaction modes, NPC speaker/profile, quest update,
+  quest state, and live narration-speaker contracts.
 - `packages/client/src/CharacterCreator.tsx`: guided SRD creator and final-sheet review.
 - `packages/client/src/App.tsx`: game screen, character sheet, and settings UI (the retired creator
   remains temporarily as unreachable code and should be removed during the next UI extraction).
@@ -135,6 +144,9 @@ Current manual regression checklist:
 - During narration: pause, resume, change volume, then mute mid-sentence.
 - In Settings, independently mute and adjust music/effects; confirm the Now Playing label matches
   the scene, choices click, a requested roll cues, and combat/boss mood changes the arrangement.
+- Use Speak with two different NPCs, then revisit the first; verify direct replies, distinct voices,
+  and stable voice reuse. Use Ask DM and verify it answers without moving the scene.
+- Open Quests and verify the opening main quest; inspect duplicate inventory item grouping/icons.
 - Create a named save, start a new game, load the save, and verify hero/story/voice restoration.
 - Close the final browser during narration; verify audio stops and reopening restores state.
 
@@ -143,4 +155,6 @@ Current manual regression checklist:
 The roadmap remains authoritative. The most immediate incomplete Phase 1/2 items are compact
 selectors for remaining level-1 class/spell choices, the broader SRD data import, starter scene-art
 pregeneration, an optional authored music library, and 3D dice.
+Full SRD advancement and encounter mechanics are specified in `docs/08-progression-and-content.md`;
+the current narrator must never grant levels, ASIs, class features, or item mechanics through prose.
 Do not confuse these planned features with defects in the current vertical slice.

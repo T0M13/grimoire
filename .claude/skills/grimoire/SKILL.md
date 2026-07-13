@@ -42,7 +42,8 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
 ## Architecture quick map (as implemented)
 
 - `packages/shared` — Zod schemas + TS types: `DmMove` (+ `DM_MOVE_JSON_SCHEMA` for Ollama),
-  `Character`, `Scene`, `ClientMessage`/`ServerMessage` wire protocol, `PublicState`.
+  `Character`, `Scene`, quests/NPC speakers, `ClientMessage`/`ServerMessage` wire protocol,
+  `PublicState`.
   Change schemas here first; client and server import the TS source directly.
 - `packages/rules` — pure deterministic 5e engine: seeded RNG (`seededRng`), dice notation,
   `resolveCheck` (nat 1/20 rules), damage/heal, `PREGEN_CHARACTERS`. No I/O, no LLM; every
@@ -88,6 +89,16 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
 - LLM tool calls use constrained decoding — never regex-parse free text for mechanics.
 - New DM capabilities = extend `DmMove` + `DM_MOVE_JSON_SCHEMA` in `shared`, handle in
   `game.ts` `onAction`, add narration guidance in `prompts/dm-system.md`. Keep moves small.
+- Preserve the three player intent modes. `Act` may change the world, `Speak` must produce a direct
+  NPC conversational response (or a social check with a later response), and `Ask DM` answers
+  directly without advancing time or silently performing an action.
+- Persist NPC voice identity by normalized name. Keep narrator voices outside the NPC pool, route
+  all voice audio through the existing cancellable per-tab queue, and never add TTS to the blocking
+  narration path.
+- Apply quests only from schema-validated `QuestUpdate` intents through the server reducer. Never
+  infer quest or mechanical state from narration text.
+- Do not implement advancement as free-form points. Read `docs/08-progression-and-content.md`, add
+  SRD class-level data and deterministic reducers/tests, then expose only legal pending choices.
 - Keep music and effects non-blocking, browser-local, and disposable on `pagehide`. Scene mood is
   authoritative; the DM may provide optional `DmMove.mood` when tone changes. Preserve the 12 mood
   keys so authored tracks can later replace procedural profiles without a protocol migration.

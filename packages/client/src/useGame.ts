@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CheckRequest, ClientMessage, PublicState, RollResult, ServerMessage } from "@grimoire/shared";
+import type { CheckRequest, ClientMessage, NarrationSpeaker, PublicState, RollResult, ServerMessage } from "@grimoire/shared";
 
 const GAME_ORIGIN = new URL(
   (import.meta.env.VITE_GAME_ORIGIN as string | undefined)
@@ -18,6 +18,7 @@ export interface GameConnection {
   state: PublicState | null;
   /** narration currently streaming in (not yet in state.log) */
   liveNarration: string | null;
+  liveSpeaker: NarrationSpeaker | null;
   lastRoll: RollResult | null;
   pendingCheck: CheckRequest | null;
   errorFlash: string | null;
@@ -37,6 +38,7 @@ export function useGame(): GameConnection {
   const [connected, setConnected] = useState(false);
   const [state, setState] = useState<PublicState | null>(null);
   const [liveNarration, setLiveNarration] = useState<string | null>(null);
+  const [liveSpeaker, setLiveSpeaker] = useState<NarrationSpeaker | null>(null);
   const [lastRoll, setLastRoll] = useState<RollResult | null>(null);
   const [errorFlash, setErrorFlash] = useState<string | null>(null);
 
@@ -158,9 +160,15 @@ export function useGame(): GameConnection {
             setState(msg.state);
             break;
           }
-          case "narration_start": setLiveNarration(""); break;
+          case "narration_start":
+            setLiveSpeaker(msg.speaker);
+            setLiveNarration("");
+            break;
           case "narration_chunk": setLiveNarration(prev => (prev ?? "") + msg.text); break;
-          case "narration_end": setLiveNarration(null); break;
+          case "narration_end":
+            setLiveNarration(null);
+            setLiveSpeaker(null);
+            break;
           case "audio": enqueueAudio(msg.url); break;
           case "audio_stop": stopAudio(); break;
           case "scene_image":
@@ -198,7 +206,7 @@ export function useGame(): GameConnection {
   }, []);
 
   return {
-    connected, state, liveNarration, lastRoll,
+    connected, state, liveNarration, liveSpeaker, lastRoll,
     pendingCheck: state?.pendingCheck ?? null,
     errorFlash,
     audio: { muted, setMuted, volume, setVolume, paused, togglePause, speaking },

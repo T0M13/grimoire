@@ -5,7 +5,7 @@ import {
 } from "@grimoire/rules";
 import {
   SKILL_ABILITY, SKILLS, ABILITIES,
-  type Ability, type AbilityScores, type Character, type Skill,
+  type Ability, type AbilityScores, type Character, type NarrationSpeaker, type Quest, type Skill,
 } from "@grimoire/shared";
 import { assetUrl, useGame } from "./useGame";
 import { useSoundscape, type SoundscapeControls } from "./useSoundscape";
@@ -226,8 +226,10 @@ function JoinScreen({ onJoin, connected }: { onJoin: (p: JoinPayload) => void; c
 
 function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>; myName: string; sound: SoundscapeControls }) {
   const [input, setInput] = useState("");
+  const [intentMode, setIntentMode] = useState<"act" | "speak" | "ask_dm">("act");
   const [premise, setPremise] = useState("");
   const [sheetFor, setSheetFor] = useState<string | null>(null); // character id
+  const [questsOpen, setQuestsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { state } = game;
   if (!state) return null;
@@ -235,9 +237,9 @@ function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>;
   const myCheck = state.pendingCheck && state.pendingCheck.playerName.toLowerCase() === myName.toLowerCase();
   const sheetCharacter = sheetFor ? state.party.find(c => c.id === sheetFor) ?? null : null;
 
-  const act = (text: string) => {
+  const act = (text: string, mode: "act" | "speak" | "ask_dm" = intentMode) => {
     if (!text.trim()) return;
-    game.send({ type: "action", text: text.trim() });
+    game.send({ type: "action", text: text.trim(), mode });
     setInput("");
   };
 
@@ -253,7 +255,7 @@ function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>;
           {state.scene.exits.length > 0 && (
             <div className="hidden md:flex gap-2">
               {state.scene.exits.map(e => (
-                <button key={e} data-sfx="choice" onClick={() => act(`We head to ${e}.`)}
+                <button key={e} data-sfx="choice" onClick={() => act(`We head to ${e}.`, "act")}
                   className="px-2.5 py-1 rounded-full border border-stone-600/60 bg-black/40 hover:border-amber-500/60 text-xs">
                   {e}
                 </button>
@@ -270,6 +272,10 @@ function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>;
             className="px-2.5 py-1 rounded-full border border-stone-600/60 bg-black/40 text-xs hover:border-amber-500/60">
             Sheet
           </button>
+          <button onClick={() => setQuestsOpen(true)}
+            className="px-2.5 py-1 rounded-full border border-stone-600/60 bg-black/40 text-xs hover:border-amber-500/60">
+            Quests{state.quests.filter(q => q.status === "active").length > 0 ? ` · ${state.quests.filter(q => q.status === "active").length}` : ""}
+          </button>
           <button onClick={() => setSettingsOpen(true)} title="Settings" aria-label="Settings"
             className="p-1.5 rounded-full border border-stone-600/60 bg-black/40 hover:border-amber-500/60">
             <GearIcon />
@@ -278,6 +284,7 @@ function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>;
       </div>
 
       {sheetCharacter && <SheetDrawer c={sheetCharacter} onClose={() => setSheetFor(null)} />}
+      {questsOpen && <QuestDrawer quests={state.quests} onClose={() => setQuestsOpen(false)} />}
       {settingsOpen && <SettingsPanel game={game} sound={sound} onClose={() => setSettingsOpen(false)} />}
 
       {/* party rail */}
@@ -307,7 +314,7 @@ function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>;
 
       {/* bottom: narration + input */}
       <div className="absolute bottom-0 inset-x-0 px-4 pb-4 flex flex-col items-center gap-3">
-        <Narration state={state} live={game.liveNarration} />
+        <Narration state={state} live={game.liveNarration} liveSpeaker={game.liveSpeaker} />
 
         {myCheck && !state.dmBusy ? (
           <button onClick={() => game.send({ type: "roll" })}
@@ -332,24 +339,39 @@ function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>;
             {state.suggestedActions.length > 0 && !state.dmBusy && (
               <div className="flex flex-wrap justify-center gap-2">
                 {state.suggestedActions.map(s => (
-                  <button key={s} data-sfx="choice" onClick={() => act(s)}
+                  <button key={s} data-sfx="choice" onClick={() => act(s, "act")}
                     className="px-3 py-1.5 rounded-full border border-stone-600/70 bg-black/50 hover:border-amber-500/70 text-sm text-stone-200">
                     {s}
                   </button>
                 ))}
               </div>
             )}
-            <form className="w-full max-w-2xl flex gap-2"
-              onSubmit={e => { e.preventDefault(); if (!state.dmBusy) act(input); }}>
-              <input value={input} onChange={e => setInput(e.target.value)}
-                placeholder={state.dmBusy ? "The Storyteller is speaking..." : "What do you do?"}
-                disabled={state.dmBusy}
-                className="flex-1 bg-stone-900/85 border border-stone-700 rounded-xl px-4 py-3 outline-none focus:border-amber-600/60 disabled:opacity-60" />
-              <button type="submit" disabled={state.dmBusy || !input.trim()}
-                className="rounded-xl bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 px-5 font-medium">
-                Act
-              </button>
-            </form>
+            <div className="w-full max-w-2xl">
+              <div className="flex gap-1 mb-1.5" role="group" aria-label="Interaction Mode">
+                {([
+                  ["act", "Act", "Describe what you do"],
+                  ["speak", "Speak", "Address an NPC directly"],
+                  ["ask_dm", "Ask DM", "Ask about the world or rules"],
+                ] as const).map(([mode, label, title]) => (
+                  <button key={mode} type="button" data-sfx="choice" aria-pressed={intentMode === mode}
+                    title={title} onClick={() => setIntentMode(mode)}
+                    className={`rounded-t-lg border px-3 py-1 text-xs transition ${intentMode === mode ? "border-amber-600/70 bg-amber-950/70 text-amber-200" : "border-stone-700/70 bg-black/50 text-stone-500 hover:text-stone-300"}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <form className="flex gap-2"
+                onSubmit={e => { e.preventDefault(); if (!state.dmBusy) act(input); }}>
+                <input value={input} onChange={e => setInput(e.target.value)}
+                  placeholder={state.dmBusy ? "The Storyteller is speaking..." : intentMode === "speak" ? "What do you say, and to whom?" : intentMode === "ask_dm" ? "Ask the Storyteller about your world..." : "What do you do?"}
+                  disabled={state.dmBusy}
+                  className="flex-1 bg-stone-900/85 border border-stone-700 rounded-xl px-4 py-3 outline-none focus:border-amber-600/60 disabled:opacity-60" />
+                <button type="submit" disabled={state.dmBusy || !input.trim()}
+                  className="rounded-xl bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 px-5 font-medium">
+                  {intentMode === "speak" ? "Speak" : intentMode === "ask_dm" ? "Ask DM" : "Act"}
+                </button>
+              </form>
+            </div>
           </>
         )}
         {game.errorFlash && <div className="fadein-fast text-red-300/90 text-sm">{game.errorFlash}</div>}
@@ -380,20 +402,24 @@ function SceneArt({ url }: { url: string | null }) {
   );
 }
 
-function Narration({ state, live }: { state: NonNullable<ReturnType<typeof useGame>["state"]>; live: string | null }) {
+function Narration({ state, live, liveSpeaker }: { state: NonNullable<ReturnType<typeof useGame>["state"]>; live: string | null; liveSpeaker: NarrationSpeaker | null }) {
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => { box.current?.scrollTo({ top: box.current.scrollHeight }); }, [live, state.log.length]);
   const recent = state.log.slice(-6);
   return (
     <div ref={box} className="w-full max-w-3xl max-h-56 md:max-h-64 overflow-y-auto rounded-2xl bg-black/55 backdrop-blur-sm px-6 py-4 space-y-3">
-      {recent.map((e, i) => (
-        <p key={`${state.log.length - recent.length + i}`} className={e.who === "dm" ? "narration text-lg leading-relaxed text-amber-50/95" : "text-sm text-sky-200/85"}>
-          {e.who !== "dm" && e.who !== "system" && <span className="font-semibold">{e.who}: </span>}
-          {e.who === "system" ? <span className="text-stone-400 italic text-xs">{e.text}</span> : e.text}
-        </p>
-      ))}
+      {recent.map((e, i) => {
+        const kind = e.kind ?? (e.who === "dm" ? "dm" : e.who === "system" ? "system" : "player");
+        return (
+          <p key={`${state.log.length - recent.length + i}`} className={kind === "dm" ? "narration text-lg leading-relaxed text-amber-50/95" : kind === "npc" ? "narration text-lg leading-relaxed text-emerald-100/95" : "text-sm text-sky-200/85"}>
+            {kind !== "system" && <span className={`font-semibold ${kind === "dm" || kind === "npc" ? "text-xs uppercase tracking-wider mr-1.5 opacity-65" : ""}`}>{kind === "dm" && e.who === "dm" ? "Storyteller" : e.who}: </span>}
+            {kind === "system" ? <span className="text-stone-400 italic text-xs">{e.text}</span> : e.text}
+          </p>
+        );
+      })}
       {live !== null && (
         <p className="narration text-lg leading-relaxed text-amber-50/95">
+          <span className={`font-semibold text-xs uppercase tracking-wider mr-1.5 opacity-65 ${liveSpeaker?.kind === "npc" ? "text-emerald-200" : ""}`}>{liveSpeaker?.name ?? "Storyteller"}: </span>
           {live}<span className="ember"><span>▍</span></span>
         </p>
       )}
@@ -441,6 +467,24 @@ function GearIcon() {
   );
 }
 
+function ItemIcon({ item }: { item: string }) {
+  const name = item.toLowerCase();
+  const common = { width: 19, height: 19, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  if (/sword|axe|mace|dagger|bow|crossbow|staff|spear|javelin|hammer|club|weapon/.test(name))
+    return <svg {...common}><path d="m14 4 6-2-2 6-9 9-4 1 1-4 8-10Z"/><path d="m4 20 4-4M9 14l2 2"/></svg>;
+  if (/armor|mail|shield|leather|robe/.test(name))
+    return <svg {...common}><path d="M12 3 5 6v5c0 4.6 2.8 8.1 7 10 4.2-1.9 7-5.4 7-10V6l-7-3Z"/><path d="M12 7v9"/></svg>;
+  if (/spell|book|tome|scroll|component|holy symbol|focus/.test(name))
+    return <svg {...common}><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21V5.5ZM20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5A2.5 2.5 0 0 1 20 21V5.5Z"/></svg>;
+  if (/potion|flask|vial|healer|herbal/.test(name))
+    return <svg {...common}><path d="M9 3h6M10 3v5l-5 9a2.5 2.5 0 0 0 2.2 4h9.6a2.5 2.5 0 0 0 2.2-4l-5-9V3"/><path d="M7 16h10"/></svg>;
+  if (/ration|food|bread|waterskin|wine|ale/.test(name))
+    return <svg {...common}><path d="M7 3v7M4 3v4a3 3 0 0 0 6 0V3M7 10v11M16 3v18M16 3c5 3 5 8 0 10"/></svg>;
+  if (/tool|kit|rope|torch|tinder|crowbar|piton|ink|quill|pack/.test(name))
+    return <svg {...common}><path d="m14 6 4-4 4 4-4 4M13 7 3 17v4h4L17 11M4 13l7 7"/></svg>;
+  return <svg {...common}><path d="M5 8h14l-1 13H6L5 8Z"/><path d="M9 8V5a3 3 0 0 1 6 0v3M5 12h14"/></svg>;
+}
+
 function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="absolute inset-0 z-20" onClick={onClose}>
@@ -465,6 +509,11 @@ function SheetDrawer({ c, onClose }: { c: Character; onClose: () => void }) {
   }));
   const passivePerception = 10 + mod(c.abilities.WIS ?? 10)
     + (c.proficientSkills.includes("Perception") ? c.proficiencyBonus : 0);
+  const inventory = Object.entries(c.inventory.reduce<Record<string, number>>((items, item) => {
+    const key = item.trim();
+    items[key] = (items[key] ?? 0) + 1;
+    return items;
+  }, {}));
   return (
     <Drawer title={c.name} onClose={onClose}>
       <div className="flex items-center gap-4 mb-5">
@@ -521,11 +570,19 @@ function SheetDrawer({ c, onClose }: { c: Character; onClose: () => void }) {
       </div>
 
       <SectionTitle>Inventory</SectionTitle>
-      <ul className="mb-5 space-y-1">
-        {c.inventory.map((item, i) => (
-          <li key={i} className="text-sm text-stone-300 border-b border-stone-900 pb-1 capitalize">{item}</li>
+      <ul className="mb-5 grid grid-cols-2 gap-2">
+        {inventory.map(([item, count]) => (
+          <li key={item} className="min-h-14 flex items-center gap-2.5 rounded-xl border border-stone-800 bg-stone-900/60 px-2.5 py-2">
+            <div className="w-8 h-8 shrink-0 rounded-lg border border-stone-700 bg-stone-950 flex items-center justify-center text-amber-300/75">
+              <ItemIcon item={item} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs text-stone-300 capitalize leading-tight">{item}</div>
+              {count > 1 && <div className="text-[10px] text-stone-500">Quantity · {count}</div>}
+            </div>
+          </li>
         ))}
-        {c.inventory.length === 0 && <li className="text-sm text-stone-500 italic">Empty Pockets</li>}
+        {inventory.length === 0 && <li className="col-span-2 text-sm text-stone-500 italic">Empty Pockets</li>}
       </ul>
 
       <SectionTitle>Traits & Proficiencies</SectionTitle>
@@ -557,6 +614,30 @@ function SheetDrawer({ c, onClose }: { c: Character; onClose: () => void }) {
   );
 }
 
+function QuestDrawer({ quests, onClose }: { quests: Quest[]; onClose: () => void }) {
+  const ordered = [...quests].sort((a, b) => Number(b.status === "active") - Number(a.status === "active") || Number(b.isMain) - Number(a.isMain));
+  return (
+    <Drawer title="Quest Journal" onClose={onClose}>
+      {ordered.length === 0 && <p className="text-sm text-stone-500 italic">Your first quest appears when the adventure begins.</p>}
+      <div className="space-y-3">
+        {ordered.map(quest => (
+          <article key={quest.id} className={`rounded-xl border p-3 ${quest.status === "active" ? "border-amber-800/60 bg-amber-950/15" : "border-stone-800 bg-stone-900/45 opacity-70"}`}>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-stone-500">{quest.isMain ? "Main Quest" : "Side Quest"}</div>
+                <h3 className="narration text-lg text-amber-100/90">{quest.title}</h3>
+              </div>
+              <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide ${quest.status === "active" ? "border-amber-700/60 text-amber-300" : quest.status === "completed" ? "border-emerald-800 text-emerald-400" : "border-red-900 text-red-400"}`}>{quest.status}</span>
+            </div>
+            <p className="mt-2 text-sm text-stone-200">{quest.objective}</p>
+            <p className="mt-1 text-xs leading-relaxed text-stone-500">{quest.summary}</p>
+          </article>
+        ))}
+      </div>
+    </Drawer>
+  );
+}
+
 function SettingsPanel({ game, sound, onClose }: { game: ReturnType<typeof useGame>; sound: SoundscapeControls; onClose: () => void }) {
   const [slotName, setSlotName] = useState("");
   const state = game.state!;
@@ -566,7 +647,7 @@ function SettingsPanel({ game, sound, onClose }: { game: ReturnType<typeof useGa
       <div className="flex items-center gap-2 mb-3">
         <button onClick={() => game.audio.setMuted(!game.audio.muted)}
           className={`rounded-xl border px-3 py-1.5 text-sm transition ${game.audio.muted ? "border-stone-700 text-stone-500" : "border-amber-600/60 text-amber-200 bg-amber-950/30"}`}>
-          {game.audio.muted ? "Voice Off" : "Voice On"}
+          {game.audio.muted ? "All Voices Off" : "All Voices On"}
         </button>
         {(game.audio.speaking || game.audio.paused) && !game.audio.muted && (
           <button onClick={game.audio.togglePause}
@@ -584,11 +665,12 @@ function SettingsPanel({ game, sound, onClose }: { game: ReturnType<typeof useGa
         ))}
       </div>
       <label className="block mb-6">
-        <span className="text-xs text-stone-500">Narrator Volume</span>
+        <span className="text-xs text-stone-500">Narrator & NPC Volume</span>
         <input type="range" min={0} max={1} step={0.05} value={game.audio.volume}
           onChange={e => game.audio.setVolume(Number(e.target.value))}
           className="w-full accent-amber-600" />
       </label>
+      <p className="-mt-4 mb-6 text-[11px] leading-relaxed text-stone-600">The storyteller keeps the selected voice. Each named NPC receives a different persistent voice based on sex and personality.</p>
 
       <SectionTitle>Soundscape</SectionTitle>
       <div className="grid grid-cols-2 gap-2 mb-3">

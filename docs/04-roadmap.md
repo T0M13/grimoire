@@ -38,6 +38,10 @@ The game is fun for ONE player with text + voice only.
   disconnect autosave, new-game/load flow, and hidden process lifecycle with last-tab cleanup
 - [x] Tab-local procedural soundscape: 12 mood profiles, crossfades, combat/boss arrangements,
   UI/choice/scene/roll/result/event cues, and independent music/effects controls
+- [x] Explicit Act / Speak / Ask DM input modes with labeled speakers
+- [x] Persistent per-NPC Kokoro voice identity selected from sex/personality descriptors
+- [x] Structured main/side quest transitions and a Quest Journal drawer
+- [x] Grouped inventory cards with lightweight code-native category icons
 - **Playtest gate:** can you enjoyably play 2 hours solo and resume next day? *(ready to try)*
 - Measured e2e (2026-07-13, clean GPU): action → first narration text **1.3 s**, opening
   scene art **2.3 s**, roll path verified (Stealth DC 13 requested by DM, engine-rolled).
@@ -61,6 +65,16 @@ The game is fun for ONE player with text + voice only.
 - Persistent NPC descriptions and cached dialogue shots within stable location art
 - Full design and staged delivery: `06-open-world-multiplayer.md`
 - Lobby, invite codes, seats, reconnection, drop-in/out
+
+## Phase 4 — Advancement and complete encounters
+
+- Deterministic experience or milestone awards and SRD level thresholds
+- Deferred level-up flow with class feature tables and compact required-choice tabs
+- Legal Ability Score Improvement allocation at the class levels that grant it (not free-form skill points)
+- Hit-point increase, proficiency-bonus changes, spell slots/known/prepared choices, and resource tracking
+- Structured inventory entities (quantity, category, weight, equipped state, description, optional art key)
+- Full attacks, initiative, actions, damage, conditions, rests, death saves, and spell effects
+- Detailed design and implementation order: `08-progression-and-content.md`
 - Spotlight system; private whispers; per-player roll locks
 - Tailscale/cloudflared setup docs + connection doctor in the launcher
 - Multi-voice NPC dialogue

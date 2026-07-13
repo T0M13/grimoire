@@ -44,6 +44,7 @@ the campaign continues next weekend exactly where it stopped.
 | [docs/05-handoff.md](docs/05-handoff.md) | Exact implemented state, setup, code map, and continuation checklist |
 | [docs/06-open-world-multiplayer.md](docs/06-open-world-multiplayer.md) | Parallel NPC dialogue, world events, quest scopes, and persistent scene-shot plan |
 | [docs/07-srd-rules-coverage.md](docs/07-srd-rules-coverage.md) | Exact implemented 2014 SRD boundary, character creation, omissions, and LLM/rules contract |
+| [docs/08-progression-and-content.md](docs/08-progression-and-content.md) | Leveling, class choices, inventory assets, NPC voices, and quest delivery plan |
 | [.claude/skills/grimoire/SKILL.md](.claude/skills/grimoire/SKILL.md) | Claude Code skill: how to work on this project |
 
 ## Quickstart (Windows host)
@@ -70,6 +71,12 @@ autoplay policy). Settings has independent narrator, music, and effects mute/vol
 The soundtrack crossfades across all scene moods, with distinct combat and boss arrangements;
 closing the tab destroys its audio graph. No music files, audio service, or extra server package
 is required.
+
+During play, choose **Act**, **Speak**, or **Ask DM** above the input. Speak forces a direct NPC
+conversation and keeps a stable voice for each named NPC. Ask DM gives a labeled Storyteller/DM
+answer about established world facts or available options without silently taking an action.
+The Quest Journal tracks structured main and side objectives; inventory is grouped into visual
+item cards on the character sheet.
 
 ## Quickstart (Linux host/server)
 

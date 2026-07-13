@@ -178,16 +178,17 @@ let ttsSeq = 0;
 /** Synthesize one sentence; returns the served URL, or null if the sidecar is down (text-only mode). */
 export async function synthesize(
   text: string,
-  voiceSex: "male" | "female" = "male",
+  voice: "male" | "female" | string = "male",
   cancel?: AbortSignal,
 ): Promise<string | null> {
   const clean = text.replace(/\*[^*]*\*/g, "").trim(); // strip stage directions
   if (!clean) return null;
+  const voiceId = voice === "male" || voice === "female" ? CONFIG.narratorVoices[voice] : voice;
   try {
     const res = await fetch(`${CONFIG.ttsUrl}/tts`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text: clean, voice: CONFIG.narratorVoices[voiceSex] }),
+      body: JSON.stringify({ text: clean, voice: voiceId }),
       signal: cancel
         ? AbortSignal.any([cancel, AbortSignal.timeout(30000)])
         : AbortSignal.timeout(30000),

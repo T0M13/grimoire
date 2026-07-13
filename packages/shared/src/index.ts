@@ -144,9 +144,27 @@ export const CheckIntentSchema = z.object({
 });
 export type CheckIntent = z.infer<typeof CheckIntentSchema>;
 
+export const NpcSpeakerSchema = z.object({
+  name: z.string().min(1).max(60),
+  sex: SexSchema,
+  personality: z.string().min(1).max(100),
+});
+export type NpcSpeaker = z.infer<typeof NpcSpeakerSchema>;
+
+export const QuestUpdateSchema = z.object({
+  action: z.enum(["start", "advance", "complete", "fail"]),
+  title: z.string().min(1).max(80),
+  objective: z.string().min(1).max(180),
+  summary: z.string().min(1).max(240),
+  isMain: z.boolean(),
+});
+export type QuestUpdate = z.infer<typeof QuestUpdateSchema>;
+
 export const DmMoveSchema = z.object({
   move: z.enum(["narrate", "request_check", "change_scene", "give_item"]),
   mood: MoodSchema.optional(),
+  npc: NpcSpeakerSchema.optional(),
+  quest: QuestUpdateSchema.optional(),
   check: CheckIntentSchema.optional(),
   scene: z
     .object({
@@ -170,6 +188,26 @@ export const DM_MOVE_JSON_SCHEMA = {
   properties: {
     move: { type: "string", enum: ["narrate", "request_check", "change_scene", "give_item"] },
     mood: { type: "string", enum: [...MOODS] },
+    npc: {
+      type: "object",
+      properties: {
+        name: { type: "string", maxLength: 60 },
+        sex: { type: "string", enum: ["male", "female"] },
+        personality: { type: "string", maxLength: 100 },
+      },
+      required: ["name", "sex", "personality"],
+    },
+    quest: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["start", "advance", "complete", "fail"] },
+        title: { type: "string", maxLength: 80 },
+        objective: { type: "string", maxLength: 180 },
+        summary: { type: "string", maxLength: 240 },
+        isMain: { type: "boolean" },
+      },
+      required: ["action", "title", "objective", "summary", "isMain"],
+    },
     check: {
       type: "object",
       properties: {
@@ -248,7 +286,11 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
     languages: z.array(z.string().max(40)).max(3).optional(),
     equipmentPackageId: z.string().max(40).optional(),
   }),
-  z.object({ type: z.literal("action"), text: z.string().min(1).max(500) }),
+  z.object({
+    type: z.literal("action"),
+    text: z.string().min(1).max(500),
+    mode: z.enum(["act", "speak", "ask_dm"]).default("act"),
+  }),
   z.object({ type: z.literal("roll") }), // respond to a pending roll request
   z.object({ type: z.literal("new_campaign"), premise: z.string().max(300).optional() }),
   z.object({ type: z.literal("set_voice"), voice: SexSchema }),
@@ -271,7 +313,7 @@ export type PortraitRequest = z.infer<typeof PortraitRequestSchema>;
 /** Server -> client (broadcast) */
 export type ServerMessage =
   | { type: "state"; state: PublicState }
-  | { type: "narration_start"; speaker: "dm" }
+  | { type: "narration_start"; speaker: NarrationSpeaker }
   | { type: "narration_chunk"; text: string }
   | { type: "narration_end" }
   | { type: "audio"; url: string; seq: number }
@@ -284,6 +326,26 @@ export type ServerMessage =
 export interface LogEntry {
   who: string; // "dm" | player name
   text: string;
+  kind?: "dm" | "player" | "npc" | "system";
+}
+
+export interface NarrationSpeaker {
+  kind: "dm" | "npc";
+  name: string;
+}
+
+export interface Quest {
+  id: string;
+  title: string;
+  objective: string;
+  summary: string;
+  status: "active" | "completed" | "failed";
+  isMain: boolean;
+  updatedAt: string;
+}
+
+export interface NpcVoiceProfile extends NpcSpeaker {
+  voice: string;
 }
 
 export interface SaveMeta {
@@ -299,7 +361,10 @@ export interface PublicState {
   log: LogEntry[];
   suggestedActions: string[];
   pendingCheck: CheckRequest | null;
+  pendingNpc: NpcSpeaker | null;
   dmBusy: boolean;
   narratorVoice: Sex;
+  quests: Quest[];
+  npcVoices: Record<string, NpcVoiceProfile>;
   saves: SaveMeta[];
 }

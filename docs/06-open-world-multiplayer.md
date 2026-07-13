@@ -32,6 +32,10 @@ Narration is rendered for a recipient, not stored as one universally relative pa
 The current shared log remains suitable for solo play and party-wide beats. Before parallel
 activities ship, log entries need `scope`, `participants`, `locationId`, and `eventId` fields.
 
+The shared-room foundation now distinguishes **Act**, **Speak**, and **Ask DM**. Speak creates a
+direct labeled NPC beat, and named NPCs keep a persisted voice profile across conversations.
+This is not private dialogue yet: all current-room clients still receive the same text and audio.
+
 ## Authoritative model
 
 ```text
@@ -78,7 +82,8 @@ Planned tables/entities:
 
 ## Delivery slices
 
-1. Add quest/event journal UI with personal/party/world scopes on the current shared room.
+1. Add quest/event journal UI on the current shared room. **Party quest foundation complete**;
+   personal/world scopes and deterministic world-event triggers remain.
 2. Add stable locations, occupants, and location-scoped public feeds.
 3. Add private NPC conversation activities and recipient-scoped messages/audio.
 4. Allow non-conflicting activities to resolve concurrently with revision checks.

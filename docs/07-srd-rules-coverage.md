@@ -39,6 +39,7 @@ sends choices; `packages/server/src/game.ts` reconstructs and validates them thr
 | Equipment | Two compact, legal SRD starting packages per class; derived level-1 HP and armor class account for armor, shield, unarmored defense, Draconic Resilience, Constitution, Dexterity, and Dwarven Toughness |
 | Sheet | Race/lineage, background, alignment, six abilities, saves, all skills, HP, AC, speed, hit die, traits, class features, spells, languages, tools, equipment, and story flavor |
 | Checks | Ability/skill modifiers and proficiency are deterministic; named difficulty maps to DC 5/10/15/20/25/30; natural 1/20 have no automatic effect on ability checks |
+| Quest state | Structured campaign objectives persist and update through validated DM intents; quest prose itself grants no mechanics |
 
 ## Deliberately not represented as complete
 
@@ -53,6 +54,9 @@ sends choices; `packages/server/src/game.ts` reconstructs and validates them thr
   Initiative, attacks, spell effects, rests, conditions, death saves, resources, encounters, and
   advancement remain Phase 4/5 work. Until code implements a mechanic, narration must not mutate it
   or claim that Grimoire has rules-complete combat.
+- Advancement is not implemented. The model cannot award a level, increase an ability, unlock a
+  feature, or alter proficiency. D&D 5e does not use a generic pool of skill points: later ASIs,
+  proficiency/expertise choices, class features, and spells must occur only at their legal levels.
 
 ## LLM boundary
 

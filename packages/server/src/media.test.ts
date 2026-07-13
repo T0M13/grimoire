@@ -59,6 +59,17 @@ describe("sceneSignature", () => {
 });
 
 describe("synthesize", () => {
+  it("passes a persistent NPC voice through unchanged", async () => {
+    let requestedVoice = "";
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      requestedVoice = JSON.parse(String(init?.body)).voice as string;
+      return { ok: false } as Response;
+    });
+    await expect(synthesize("Welcome back.", "af_bella")).resolves.toBeNull();
+    expect(requestedVoice).toBe("af_bella");
+    fetchMock.mockRestore();
+  });
+
   it("returns promptly when the final listener cancels an in-flight request", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((_input, init) =>
       new Promise((_resolve, reject) => {

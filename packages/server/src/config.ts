@@ -20,6 +20,11 @@ export const CONFIG = {
   // best-in-class Kokoro narrators: af_heart is the only grade-A voice;
   // bm_fable is the warm British "storyteller" voice
   narratorVoices: { male: "bm_fable", female: "af_heart" } as Record<"male" | "female", string>,
+  // High-quality American-English Kokoro voices reserved for persistent NPC identities.
+  npcVoices: {
+    female: ["af_bella", "af_nicole", "af_kore", "af_sarah", "af_aoede"],
+    male: ["am_fenrir", "am_michael", "am_puck", "am_eric", "am_onyx"],
+  } as Record<"male" | "female", readonly string[]>,
   checkpoint: "DreamShaper_8_pruned.safetensors",
   lcmLora: "lcm-lora-sdv15.safetensors",
   /** Locked style so every scene reads as one artist's work. */
