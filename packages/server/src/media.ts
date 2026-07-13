@@ -85,9 +85,17 @@ const AGE_WORDS = {
 } as const;
 
 const CLASS_LOOK = {
+  Barbarian: "barbarian in rugged hide armor with a heavy fur mantle",
+  Bard: "bard in practical travel clothes carrying a well-worn instrument",
   Fighter: "fighter wearing a steel breastplate",
   Rogue: "rogue in a dark hooded cloak",
   Cleric: "cleric in chainmail under white-and-gold vestments",
+  Druid: "druid in weathered leather and layered natural fabrics",
+  Monk: "monk in simple travel robes with wrapped forearms",
+  Paladin: "paladin in polished mail with a plain heraldic mantle",
+  Ranger: "ranger in a forest-green cloak over practical leather armor",
+  Sorcerer: "sorcerer in elegant travel clothes touched by subtle arcane light",
+  Warlock: "warlock in dark layered robes bearing a small occult talisman",
   Wizard: "wizard in deep blue robes with faint embroidered stars",
 } as const;
 

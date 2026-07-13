@@ -18,6 +18,10 @@ button { text-transform: capitalize; }
   font-family: var(--serif);
 }
 
+.creator-field {
+  @apply w-full bg-stone-900/80 border border-stone-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-600/60;
+}
+
 /* slow Ken Burns drift so the scene always feels alive */
 @keyframes kenburns {
   0%   { transform: scale(1.02) translate(0, 0); }

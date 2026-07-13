@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  abilityModifier, applyDamage, buildLevelThreeCharacter, CLASS_BUILD_RULES, d20, heal,
-  POINT_BUY_BUDGET, PREGEN_CHARACTERS, pointBuySpent,
-  resolveCheck, roll, rollDie, seededRng, skillModifier,
-  validateCharacterChoices,
+  BACKGROUND_BUILD_RULES, RACE_BUILD_RULES, abilityModifier, applyDamage,
+  buildLevelOneCharacter, buildLevelThreeCharacter, checkRequestFromIntent,
+  CLASS_BUILD_RULES, d20, heal, POINT_BUY_BUDGET, PREGEN_CHARACTERS, pointBuySpent,
+  resolveCheck, roll, rollAbilityScores, rollDie, seededRng, skillModifier,
+  validateAbilityScores, validateBuildChoices, validateCharacterChoices,
 } from "./index.js";
 import type { CheckRequest } from "@grimoire/shared";
 
@@ -104,13 +105,13 @@ describe("resolveCheck", () => {
     }
   });
 
-  it("natural 20 always succeeds, natural 1 always fails", () => {
+  it("does not treat natural 1 or 20 as automatic on an ability check", () => {
     let saw20 = false, saw1 = false;
     for (let seed = 0; seed < 500 && !(saw20 && saw1); seed++) {
       const r = resolveCheck(rogue, { ...check, dc: 30 }, seededRng(seed));
-      if (r.die === 20) { expect(r.success).toBe(true); expect(r.critical).toBe("success"); saw20 = true; }
+      if (r.die === 20) { expect(r.success).toBe(false); expect(r.critical).toBe("none"); saw20 = true; }
       const r2 = resolveCheck(rogue, { ...check, dc: 5 }, seededRng(seed));
-      if (r2.die === 1) { expect(r2.success).toBe(false); expect(r2.critical).toBe("failure"); saw1 = true; }
+      if (r2.die === 1) { expect(r2.success).toBe(true); expect(r2.critical).toBe("none"); saw1 = true; }
     }
     expect(saw20).toBe(true);
     expect(saw1).toBe(true);
@@ -160,5 +161,53 @@ describe("SRD point-buy character creation", () => {
     expect(wizard.ac).toBe(11);
     expect(wizard.proficientSkills).toEqual(["Arcana", "Investigation"]);
     expect(wizard.inventory).toContain("spellbook");
+  });
+});
+
+describe("complete SRD level-one character creation", () => {
+  const choices = {
+    classRules: CLASS_BUILD_RULES.Fighter,
+    raceRules: RACE_BUILD_RULES.Human,
+    subraceId: null,
+    abilityMethod: "standard" as const,
+    abilities: CLASS_BUILD_RULES.Fighter.recommendedAbilities,
+    racialAbilityChoices: [],
+    classSkills: ["Athletics", "Perception"] as const,
+    racialSkills: [] as const,
+    backgroundRules: BACKGROUND_BUILD_RULES.acolyte,
+    backgroundName: "Acolyte",
+    backgroundSkills: [] as const,
+    alignment: "Neutral Good" as const,
+    personalityTraits: ["I keep my word."], ideal: "Duty", bond: "My village", flaw: "Stubborn",
+    extraLanguages: ["Dwarvish", "Elvish", "Giant"],
+    equipmentPackageId: "guardian",
+  };
+
+  it("validates every dependent choice and derives the authoritative sheet", () => {
+    expect(validateBuildChoices({ ...choices, classSkills: [...choices.classSkills], racialSkills: [], backgroundSkills: [] })).toBeNull();
+    const fighter = buildLevelOneCharacter("id", "Mara", {
+      ...choices, classSkills: [...choices.classSkills], racialSkills: [], backgroundSkills: [],
+    });
+    expect(fighter.level).toBe(1);
+    expect(fighter.raceName).toBe("Human");
+    expect(fighter.abilities.STR).toBe(16);
+    expect(fighter.maxHp).toBe(12);
+    expect(fighter.ac).toBe(18);
+    expect(fighter.proficientSkills).toEqual(["Athletics", "Perception", "Insight", "Religion"]);
+    expect(fighter.languages).toEqual(["Common", "Dwarvish", "Elvish", "Giant"]);
+  });
+
+  it("supports all official ability methods", () => {
+    expect(validateAbilityScores(CLASS_BUILD_RULES.Wizard.recommendedAbilities, "standard")).toBeNull();
+    expect(validateAbilityScores(CLASS_BUILD_RULES.Wizard.recommendedAbilities, "point-buy")).toBeNull();
+    const rolled = rollAbilityScores(seededRng(42));
+    expect(validateAbilityScores(rolled, "rolled")).toBeNull();
+    expect(Object.values(rolled).every(score => score >= 3 && score <= 18)).toBe(true);
+  });
+
+  it("maps narrative difficulty categories to fixed SRD DCs", () => {
+    expect(checkRequestFromIntent({ playerName: "Mara", skill: "Athletics", difficulty: "very_easy", reason: "climb" }).dc).toBe(5);
+    expect(checkRequestFromIntent({ playerName: "Mara", skill: "Athletics", difficulty: "moderate", reason: "climb" }).dc).toBe(15);
+    expect(checkRequestFromIntent({ playerName: "Mara", skill: "Athletics", difficulty: "nearly_impossible", reason: "climb" }).dc).toBe(30);
   });
 });

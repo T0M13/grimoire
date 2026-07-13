@@ -5,8 +5,9 @@ import {
   type ServerMessage,
 } from "@grimoire/shared";
 import {
-  buildLevelThreeCharacter, classRulesById, resolveCheck, seededRng,
-  validateCharacterChoices, type Rng,
+  backgroundRulesById, buildLevelOneCharacter, buildLevelThreeCharacter, classRulesById,
+  checkRequestFromIntent, raceRulesById, resolveCheck, seededRng, validateBuildChoices,
+  validateCharacterChoices, type CharacterBuildChoices, type Rng,
 } from "@grimoire/rules";
 import { decideMove, narrate } from "./dm.js";
 import { generatePortrait, getSceneImage, SentenceStream, synthesize } from "./media.js";
@@ -153,10 +154,33 @@ export class GameRoom {
       // Mechanics come only from validated SRD choices; bio/looks remain flavor.
       const rules = classRulesById(msg.characterId) ?? classRulesById("fighter")!;
       const abilities = msg.abilities ?? rules.recommendedAbilities;
-      const proficientSkills = msg.proficientSkills ?? [...rules.recommendedSkills];
-      const validationError = validateCharacterChoices(rules, abilities, proficientSkills);
-      if (validationError) return this.send(ws, { type: "error", message: validationError });
-      const base = buildLevelThreeCharacter(crypto.randomUUID(), name, rules, abilities, proficientSkills);
+      let base: Character;
+      if (msg.raceId && msg.abilityMethod && msg.backgroundId && msg.equipmentPackageId) {
+        const raceRules = raceRulesById(msg.raceId);
+        const backgroundRules = backgroundRulesById(msg.backgroundId);
+        if (!raceRules || !backgroundRules)
+          return this.send(ws, { type: "error", message: "That character option is not part of the SRD ruleset." });
+        const choices: CharacterBuildChoices = {
+          classRules: rules, raceRules, subraceId: msg.subraceId,
+          abilityMethod: msg.abilityMethod, abilities,
+          racialAbilityChoices: msg.racialAbilityChoices ?? [],
+          classSkills: msg.proficientSkills ?? [], racialSkills: msg.racialSkills ?? [],
+          backgroundRules, backgroundName: msg.backgroundName ?? backgroundRules.label,
+          backgroundSkills: msg.backgroundSkills ?? [], alignment: msg.alignment ?? "Neutral",
+          personalityTraits: msg.personalityTraits ?? [], ideal: msg.ideal ?? "",
+          bond: msg.bond ?? "", flaw: msg.flaw ?? "", extraLanguages: msg.languages ?? [],
+          equipmentPackageId: msg.equipmentPackageId,
+        };
+        const validationError = validateBuildChoices(choices);
+        if (validationError) return this.send(ws, { type: "error", message: validationError });
+        base = buildLevelOneCharacter(crypto.randomUUID(), name, choices);
+      } else {
+        // Reconnect/script compatibility for identities created before the full 2014 builder.
+        const proficientSkills = msg.proficientSkills ?? [...rules.recommendedSkills];
+        const validationError = validateCharacterChoices(rules, abilities, proficientSkills);
+        if (validationError) return this.send(ws, { type: "error", message: validationError });
+        base = buildLevelThreeCharacter(crypto.randomUUID(), name, rules, abilities, proficientSkills);
+      }
       const character: Character = structuredClone({
         ...base,
         sex: msg.sex,
@@ -208,8 +232,9 @@ export class GameRoom {
       let instruction = "ENGINE: Narrate the next story beat reacting to the last player action (2-4 sentences).";
 
       if (move.move === "request_check" && move.check) {
-        this.state.pendingCheck = move.check;
-        instruction = `ENGINE: ${move.check.playerName} must attempt a ${move.check.skill} check (${move.check.reason}). Narrate a brief, tense lead-in (1-2 sentences) that ends at the moment of uncertainty. Do NOT reveal any outcome.`;
+        const request = checkRequestFromIntent(move.check);
+        this.state.pendingCheck = request;
+        instruction = `ENGINE: ${request.playerName} must attempt a ${request.skill} check (${request.reason}). Narrate a brief, tense lead-in (1-2 sentences) that ends at the moment of uncertainty. Do NOT reveal any outcome.`;
       } else if (move.move === "change_scene" && move.scene) {
         this.applyScene(move.scene);
         instruction = `ENGINE: The party arrives at ${move.scene.name}. Establish the new scene in 3-4 sentences: atmosphere, one sensory detail, and two things worth investigating.`;
@@ -221,7 +246,8 @@ export class GameRoom {
 
       const narration = await this.narrateAndSpeak(instruction, player);
       if (move.move === "change_scene") this.state.scene.description = narration.slice(0, 500);
-      if (move.move === "request_check" && move.check) this.broadcast({ type: "roll_request", check: move.check });
+      if (move.move === "request_check" && this.state.pendingCheck)
+        this.broadcast({ type: "roll_request", check: this.state.pendingCheck });
     } catch (err) {
       this.broadcast({ type: "error", message: "The storyteller lost the thread. Try again." });
       console.error("[dm turn failed]", err);
@@ -252,7 +278,7 @@ export class GameRoom {
     this.setBusy(true);
     try {
       await this.narrateAndSpeak(
-        "ENGINE: Narrate what happens given that mechanical result (2-4 sentences). Honor it exactly - do not soften a failure or cheapen a success. A natural 20/1 deserves extra drama.",
+        "ENGINE: Narrate what happens given that mechanical result (2-4 sentences). Honor it exactly - do not soften a failure or cheapen a success. Natural 1/20 do not automatically change an ability check result.",
         player,
       );
     } catch (err) {

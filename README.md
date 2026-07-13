@@ -43,6 +43,7 @@ the campaign continues next weekend exactly where it stopped.
 | [docs/04-roadmap.md](docs/04-roadmap.md) | Phased build plan, MVP definition |
 | [docs/05-handoff.md](docs/05-handoff.md) | Exact implemented state, setup, code map, and continuation checklist |
 | [docs/06-open-world-multiplayer.md](docs/06-open-world-multiplayer.md) | Parallel NPC dialogue, world events, quest scopes, and persistent scene-shot plan |
+| [docs/07-srd-rules-coverage.md](docs/07-srd-rules-coverage.md) | Exact implemented 2014 SRD boundary, character creation, omissions, and LLM/rules contract |
 | [.claude/skills/grimoire/SKILL.md](.claude/skills/grimoire/SKILL.md) | Claude Code skill: how to work on this project |
 
 ## Quickstart (Windows host)
@@ -93,6 +94,10 @@ listeners to a particular local interface instead of the default `0.0.0.0`.
 `npm test` runs the rules-engine/media suite;
 `node spikes/e2e-smoke.mjs` drives a full game turn against the live stack.
 Reset the campaign by deleting `var/grimoire.db`.
+
+Rules attribution is recorded in [NOTICE.md](NOTICE.md). Grimoire is currently a partial SRD
+engine; the exact implemented and pending mechanics are tracked in
+[docs/07-srd-rules-coverage.md](docs/07-srd-rules-coverage.md).
 
 ## Target hardware (host)
 

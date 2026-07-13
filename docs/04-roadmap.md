@@ -19,15 +19,17 @@ Goal: prove the latency + VRAM story on the real 4070. Throwaway code allowed.
 The game is fun for ONE player with text + voice only.
 - [x] Node server (`ws` room, full-state sync — Colyseus deferred), React shell, SQLite
   write-through persistence *(built 2026-07-13, e2e verified)*
-- [x] Rules engine v1: skill checks (nat 1/20), dice notation, ability/prof modifiers,
-  damage/heal, seeded RNG, point-buy validation, and derived level-3 HP/AC
+- [x] Rules engine v1: RAW ability checks (no automatic natural 1/20 result), fixed SRD difficulty
+  categories/DCs, dice notation, ability/proficiency modifiers, damage/heal, seeded RNG, all three
+  ability methods, build validation, and derived level-1 HP/AC
 - [ ] SRD data import (5e-database JSON → SQLite) — using 4 hand-built pregens for now
 - [x] DM orchestrator: constrained move pass (narrate / request_check / change_scene /
   give_item) + streamed narration pass; stall guard; semantic validation + retry
-- [x] MVP character creation: four SRD classes, 27-point-buy abilities, legal class skill
-  proficiencies, starter packs, identity/flavor fields, randomizer, portrait, and sheet drawer
-- [ ] Complete SRD character builder: species, backgrounds, languages, equipment alternatives,
-  class features, subclasses, and spell selection
+- [x] Guided SRD character creation: six compact tabs, nine races, twelve classes, standard/point
+  buy/rolled abilities, class/racial/background skills, languages, legal equipment packages,
+  level-1 features/default spells, full randomizer, portrait, review, and sheet drawer
+- [ ] Complete remaining level-1 choices: fighting-style alternatives, Expertise targets, ranger
+  choices, flexible tools/languages, individual spell selection, and coin-buy equipment
 - [x] Storyteller voice (Kokoro **CUDA sidecar**, ~190 ms/sentence, sentence-streamed with
   early first-clause) + streamed text
 - [x] Scene-graph movement with clickable exits

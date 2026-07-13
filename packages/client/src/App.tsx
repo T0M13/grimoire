@@ -8,6 +8,7 @@ import {
   type Ability, type AbilityScores, type Character, type Skill,
 } from "@grimoire/shared";
 import { assetUrl, useGame } from "./useGame";
+import CharacterCreator from "./CharacterCreator";
 
 const mod = (score: number) => Math.floor((score - 10) / 2);
 const fmtMod = (m: number) => (m >= 0 ? `+${m}` : `${m}`);
@@ -28,7 +29,7 @@ export default function App() {
   const joined = !!game.state?.party.some(c => c.name.toLowerCase() === myName?.toLowerCase());
 
   if (!game.state) return <Center><Embers text="Reaching the storyteller" /></Center>;
-  if (!joined) return <JoinScreen onJoin={p => game.send({ type: "join", ...p })} connected={game.connected} />;
+  if (!joined) return <CharacterCreator onJoin={p => game.send({ type: "join", ...p })} connected={game.connected} />;
   return <GameScreen {...{ game, myName: myName! }} />;
 }
 
@@ -200,7 +201,7 @@ function JoinScreen({ onJoin, connected }: { onJoin: (p: JoinPayload) => void; c
 
           <div className="rounded-xl border border-stone-800 bg-stone-900/50 px-3 py-2 mb-3">
             <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">Starter Equipment</div>
-            <div className="text-xs text-stone-300 capitalize">{rules.starterEquipment.join(" · ")}</div>
+            <div className="text-xs text-stone-300 capitalize">{rules.equipmentPackages[0]!.items.join(" · ")}</div>
           </div>
 
           <textarea
@@ -467,15 +468,15 @@ function SheetDrawer({ c, onClose }: { c: Character; onClose: () => void }) {
       <div className="flex items-center gap-4 mb-5">
         <Avatar c={c} className="w-20 h-20 rounded-xl" />
         <div>
-          <div className="text-stone-200">{c.className} · Level {c.level}</div>
-          <div className="text-stone-400 text-sm capitalize">{c.age} {c.sex}</div>
+          <div className="text-stone-200">{c.subrace ?? c.raceName ?? "Human"} · {c.className} · Level {c.level}</div>
+          <div className="text-stone-400 text-sm capitalize">{c.age} {c.sex} · {c.background ?? "Acolyte"} · {c.alignment ?? "Neutral"}</div>
           <div className="text-stone-400 text-sm mt-1">{c.hp}/{c.maxHp} HP · AC {c.ac} · Proficiency +{c.proficiencyBonus}</div>
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-2 mb-5">
         {[
-          ["Armor Class", c.ac], ["Initiative", fmtMod(mod(c.abilities.DEX ?? 10))], ["Speed", "30 ft."],
+          ["Armor Class", c.ac], ["Initiative", fmtMod(mod(c.abilities.DEX ?? 10))], ["Speed", `${c.speed ?? 30} ft.`],
           ["Hit Points", `${c.hp}/${c.maxHp}`], ["Hit Dice", `${c.level}d${rules.hitDie}`],
           ["Passive Perception", passivePerception],
         ].map(([label, value]) => (
@@ -499,7 +500,7 @@ function SheetDrawer({ c, onClose }: { c: Character; onClose: () => void }) {
       <SectionTitle>Saving Throws</SectionTitle>
       <div className="grid grid-cols-3 gap-1.5 mb-5">
         {ABILITIES.map(ability => {
-          const proficient = rules.savingThrows.includes(ability);
+          const proficient = (c.savingThrowProficiencies?.length ? c.savingThrowProficiencies : rules.savingThrows).includes(ability);
           const bonus = mod(c.abilities[ability] ?? 10) + (proficient ? c.proficiencyBonus : 0);
           return <div key={ability} className={`text-xs rounded-lg border px-2 py-1 ${proficient ? "border-amber-700/60 text-amber-200" : "border-stone-800 text-stone-500"}`}>
             {proficient ? "●" : "○"} {ability} <span className="float-right">{fmtMod(bonus)}</span>
@@ -524,6 +525,25 @@ function SheetDrawer({ c, onClose }: { c: Character; onClose: () => void }) {
         ))}
         {c.inventory.length === 0 && <li className="text-sm text-stone-500 italic">Empty Pockets</li>}
       </ul>
+
+      <SectionTitle>Traits & Proficiencies</SectionTitle>
+      <p className="text-sm text-stone-300 mb-2">{(c.traits ?? []).join(" · ") || "None Recorded"}</p>
+      {(c.classFeatures ?? []).length > 0 && <p className="text-sm text-stone-300 mb-2">{c.classFeatures.join(" · ")}</p>}
+      <p className="text-xs text-stone-500 mb-1">Languages · {(c.languages ?? ["Common"]).join(" · ")}</p>
+      {(c.toolProficiencies ?? []).length > 0 && <p className="text-xs text-stone-500 mb-5">Tools · {c.toolProficiencies.join(" · ")}</p>}
+
+      {(c.spells ?? []).length > 0 && <>
+        <SectionTitle>Spells</SectionTitle>
+        <p className="text-sm text-stone-300 mb-5">{c.spells.join(" · ")}</p>
+      </>}
+
+      {(c.personalityTraits?.length || c.ideal || c.bond || c.flaw) && <>
+        <SectionTitle>Character</SectionTitle>
+        {c.personalityTraits?.filter(Boolean).map((trait, index) => <p key={index} className="text-sm text-stone-300 mb-1">{trait}</p>)}
+        {c.ideal && <p className="text-sm text-stone-400 mt-2"><span className="text-stone-500">Ideal · </span>{c.ideal}</p>}
+        {c.bond && <p className="text-sm text-stone-400"><span className="text-stone-500">Bond · </span>{c.bond}</p>}
+        {c.flaw && <p className="text-sm text-stone-400 mb-5"><span className="text-stone-500">Flaw · </span>{c.flaw}</p>}
+      </>}
 
       {c.bio && (
         <>

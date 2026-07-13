@@ -16,8 +16,16 @@ function stateBlock(state: PublicState): string {
     },
     party: state.party.map(c => ({
       name: c.name, sex: c.sex, age: c.age, class: c.className, level: c.level,
-      hp: `${c.hp}/${c.maxHp}`, bio: c.bio.slice(0, 200) || undefined,
-      inventory: c.inventory,
+      race: c.subrace ?? c.raceName ?? "Human", background: c.background ?? "Acolyte",
+      alignment: c.alignment ?? "Neutral", hp: `${c.hp}/${c.maxHp}`, ac: c.ac,
+      speed: c.speed ?? 30, abilities: c.abilities,
+      proficientSkills: c.proficientSkills,
+      savingThrowProficiencies: c.savingThrowProficiencies ?? [],
+      racialAndBackgroundTraits: c.traits ?? [], classFeatures: c.classFeatures ?? [],
+      spells: c.spells ?? [], languages: c.languages ?? ["Common"],
+      tools: c.toolProficiencies ?? [], bio: c.bio.slice(0, 200) || undefined,
+      personalityTraits: c.personalityTraits ?? [], ideal: c.ideal || undefined,
+      bond: c.bond || undefined, flaw: c.flaw || undefined, inventory: c.inventory,
     })),
   };
   return `CAMPAIGN STATE (authoritative - do not contradict):\n${JSON.stringify(compact, null, 1)}`;
@@ -45,7 +53,8 @@ export function buildMessages(
 
 const MOVE_INSTRUCTION = `ENGINE: Choose your next DM move for the situation above. Respond ONLY with the JSON object.
 - "narrate": normal storytelling beat (default).
-- "request_check": the last player action has an uncertain, consequential outcome. Fill "check" with a fair DC.
+- "request_check": the last player action has an uncertain, consequential outcome. Fill "check"
+  with a difficulty category; never calculate or output a numerical DC.
 - "change_scene": the party moved to a genuinely new location. Fill "scene" fully. Its
   "imagePrompt" must be a concrete camera composition: say interior/exterior, architecture and
   terrain, time/weather/lighting, and the visible NPCs plus what they are physically doing. Show

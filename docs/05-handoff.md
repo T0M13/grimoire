@@ -7,9 +7,11 @@ the design documents for product intent; use this file for the exact implemented
 
 ## Current state
 
-Phase 1 is a playable local-first vertical slice. A player can create a level-3 hero from four
-SRD classes using 27-point-buy abilities and legal class skill choices, optionally randomize all
-creation fields, receive a class starter pack, generate a custom portrait, begin
+Phase 1 is a playable local-first vertical slice. A player can create a level-1 hero through the
+six-step 2014 SRD flow using all nine SRD races and all twelve classes; standard array, point buy,
+or rolled abilities; legal skills, background, languages, equipment, features, and default spells.
+The creator is split into compact tabs and can randomize a complete legal build. A player can then
+generate a custom portrait, begin
 a campaign, act through free text or suggestions, make deterministic skill checks, hear streamed
 Kokoro narration, see asynchronous scene art, inspect character sheets, and resume from SQLite.
 
@@ -19,15 +21,18 @@ multiplayer lobby/seat/spotlight feature set remains Phase 3 work.
 ## Implemented features
 
 - React/Vite/Tailwind client with reconnect-safe identity in browser local storage.
-- Character creation: name, sex, age, class, written bio, and one-click randomizer.
-- SRD 5.1 ability point buy (8–15, 27 points), class skill-proficiency choices, derived HP/AC,
-  and class starter equipment; server-side validation rejects mechanically invalid builds.
+- `CharacterCreator.tsx`: compact Race → Class → Abilities → Details → Equipment → Review tabs.
+- All twelve SRD classes and nine races, SRD lineages, three ability methods, class/racial/background
+  skills, languages, traits, level-1 features/default spells, legal equipment packages, and derived
+  HP/AC; the server rebuilds and rejects mechanically invalid sheets.
 - Background portrait generation with a `?` placeholder until the image is ready.
 - Active-player narration viewpoint: the storyteller addresses the character as "you/your" and
   solo openings cannot describe the player as accompanying their own character.
 - Clickable party badges and a character-sheet drawer for every party member.
 - Constrained two-pass AI DM: structured move selection, then streamed narration.
-- Deterministic rules engine for dice, skill checks, damage, and healing; automated test suite.
+- Deterministic rules engine for dice, skill checks, damage, and healing; ability checks correctly
+  do not auto-succeed/fail on natural 20/1. The model chooses a named difficulty category and code
+  maps it to the SRD DC scale. Exact coverage is in `docs/07-srd-rules-coverage.md`.
 - Async ComfyUI scene art with composition-aware caching and crossfade presentation. Prompts
   specify indoor/outdoor context, visible NPCs, and their physical action in the current hook.
 - Kokoro CUDA narration using `bm_fable` (male) and `af_heart` (female).
@@ -78,7 +83,9 @@ from Git. They live under `vendor/` and `var/` and are reproducible or machine-l
 - `packages/server/src/media.ts`: scene/portrait ComfyUI workflows and streamed TTS helpers.
 - `packages/server/src/db.ts`: SQLite write-through campaign, event log, and save slots.
 - `packages/client/src/useGame.ts`: WebSocket/reconnect state and narration audio engine.
-- `packages/client/src/App.tsx`: character creation, game screen, sheet, and settings UI.
+- `packages/client/src/CharacterCreator.tsx`: guided SRD creator and final-sheet review.
+- `packages/client/src/App.tsx`: game screen, character sheet, and settings UI (the retired creator
+  remains temporarily as unreachable code and should be removed during the next UI extraction).
 - `setup.ps1` / `setup.sh`: reproducible Windows/Linux runtime and model bootstraps.
 - `start.ps1` / `start.sh`: one-command launchers; `--persistent` is the Linux server mode.
 - `stop.ps1` / `stop.sh`: authenticated localhost shutdown with process-tree fallback.
@@ -109,7 +116,8 @@ For live-stack changes, also run `node spikes/e2e-smoke.mjs` and manually test t
 
 Current manual regression checklist:
 
-- Randomize a character, join, see `?`, then see the generated portrait.
+- Visit every creator tab, randomize a character, review the level-1 sheet, join, see `?`, then see
+  the generated portrait.
 - Open your own and another party member's sheet.
 - Switch narrator sex and verify the next sentence uses the selected voice.
 - During narration: pause, resume, change volume, then mute mid-sentence.
@@ -118,6 +126,7 @@ Current manual regression checklist:
 
 ## Next product work
 
-The roadmap remains authoritative. The most immediate incomplete Phase 1/2 items are SRD data
-import, a full guided character builder, starter scene-art pregeneration, music, and 3D dice.
+The roadmap remains authoritative. The most immediate incomplete Phase 1/2 items are compact
+selectors for remaining level-1 class/spell choices, the broader SRD data import, starter scene-art
+pregeneration, music, and 3D dice.
 Do not confuse these planned features with defects in the current vertical slice.

@@ -1,6 +1,6 @@
 ---
-name: Grimoire
-description: Working on the Grimoire project — a self-hosted, AI-Dungeon-Mastered D&D web game (1–6 players, host's RTX 4070 runs all AI). Use when implementing, reviewing, or designing anything in this repo: game server, rules engine, DM orchestrator, media pipeline, or web client.
+name: grimoire
+description: "Work on Grimoire, a self-hosted AI-Dungeon-Mastered SRD web game. Use when implementing, reviewing, testing, or designing this repository's game server, deterministic rules engine, DM orchestrator, media pipeline, character creator, or web client."
 ---
 
 # Grimoire project Skill
@@ -31,6 +31,13 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
    everything at the boundary.
 6. **SRD only.** Only 5e SRD (CC-BY) content in code, data, and prompts — no PHB/non-SRD
    monsters, spells, or trademarked names (e.g., no "beholder", no "Mordenkainen").
+   Read `docs/07-srd-rules-coverage.md` before changing character creation or mechanics. Never
+   describe the engine as rules-complete beyond that matrix, and preserve `NOTICE.md` attribution.
+7. **New heroes use the 2014 six-step level-1 flow.** Keep creation in compact tabs; randomization
+   must produce a legal complete build. Clients send choices, and the server reconstructs the sheet.
+8. **Prompts are not enforcement.** Give the narrator authoritative character facts, but guarantee
+   mechanics through schemas and `packages/rules`. Ability checks do not auto-succeed/fail on a
+   natural 20/1. The model emits a named difficulty; code maps it to DC 5/10/15/20/25/30.
 
 ## Architecture quick map (as implemented)
 
@@ -46,7 +53,8 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
   ComfyUI async queue + cache-by-scene-signature, Kokoro sentence streaming via
   `SentenceStream` with early first-clause emit), SQLite write-through (`db.ts`),
   config in `config.ts` (ports, models, style prompts).
-- `packages/client` — React/Vite/Tailwind v4. One screen: join → story. `useGame.ts` owns the
+- `packages/client` — React/Vite/Tailwind v4. One screen: join → story. `CharacterCreator.tsx`
+  owns the compact guided SRD flow; `useGame.ts` owns the
   socket, reconnection, and the sequential narration-audio queue. `App.tsx` includes SRD point-buy
   creation, class skill choices, randomized legal builds, full skill/save sheet views, and settings.
   `SceneArt` crossfades new art behind the story; presentation never blocks input.
