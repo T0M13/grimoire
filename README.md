@@ -44,7 +44,7 @@ the campaign continues next weekend exactly where it stopped.
 | [docs/05-handoff.md](docs/05-handoff.md) | Exact implemented state, setup, code map, and continuation checklist |
 | [.claude/skills/grimoire/SKILL.md](.claude/skills/grimoire/SKILL.md) | Claude Code skill: how to work on this project |
 
-## Quickstart (host)
+## Quickstart (Windows host)
 
 ```powershell
 .\start.ps1     # first run installs dependencies/models, then boots the full stack
@@ -60,6 +60,34 @@ All game services run without visible console windows and write diagnostics to `
 After the final browser tab disconnects, a 15-second reconnect grace period expires and the
 Grimoire-owned processes shut down automatically. Run `.\stop.ps1` for an immediate manual stop.
 An Ollama instance that was already running before Grimoire is deliberately left alone.
+
+## Quickstart (Linux host/server)
+
+The Linux bootstrap supports current Debian/Ubuntu, Fedora, and Arch-family distributions on
+x86-64 or ARM64. It installs a local Node.js 22 runtime when needed, installs Ollama, creates
+the Python/ComfyUI/Kokoro environment, verifies downloaded model checksums, and runs `npm ci`.
+
+```bash
+chmod +x setup.sh start.sh stop.sh
+./start.sh                         # desktop/session mode; stops after the last tab closes
+./start.sh --persistent            # always-on server mode
+./stop.sh
+```
+
+The web UI listens on `0.0.0.0:5173` and the game API/WebSocket listens on `0.0.0.0:8787`.
+Share `http://<server-ip>:5173`; Ollama, ComfyUI, and Kokoro remain bound to loopback. For a
+boot-managed host, first run `./setup.sh`, then adapt `deploy/grimoire.service` to your user and
+install path before enabling it with systemd.
+
+Grimoire currently has no login screen or built-in TLS. Do not expose ports 5173/8787 directly
+to the public internet. Use a trusted LAN, Tailscale/WireGuard, or an authenticated HTTPS reverse
+proxy, and firewall the two public-facing ports to that trusted network. Use
+`GRIMOIRE_TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu ./setup.sh` to force CPU PyTorch;
+without that override, setup selects CUDA 12.6 when `nvidia-smi` is available and CPU otherwise.
+When TLS terminates at a separate public game endpoint, set its origin before starting Vite, for
+example `VITE_GAME_ORIGIN=https://game.example.com ./start.sh --persistent`; the client then uses
+HTTPS assets and secure WebSockets automatically. `GRIMOIRE_BIND_HOST` can restrict both public
+listeners to a particular local interface instead of the default `0.0.0.0`.
 
 `npm test` runs the rules-engine/media suite;
 `node spikes/e2e-smoke.mjs` drives a full game turn against the live stack.

@@ -2,12 +2,15 @@
 # Starts: Ollama (if not running) + ComfyUI + Kokoro TTS + game server + web client.
 # Play at http://localhost:5173  (friends on your LAN/Tailscale: http://<your-ip>:5173)
 
+param([switch]$Persistent)
+
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 $setup = Join-Path $root "setup.ps1"
-$supervisor = Join-Path $root "tools\host\supervisor.ps1"
+$supervisor = Join-Path $root "tools\host\supervisor.mjs"
 $statePath = Join-Path $root "var\grimoire-host.json"
 $logDir = Join-Path $root "var\logs"
+$gamePort = if ($env:GRIMOIRE_GAME_PORT) { [int]$env:GRIMOIRE_GAME_PORT } else { 8787 }
 
 if (Test-Path $statePath) {
   try {
@@ -38,14 +41,23 @@ Write-Host "  --------" -ForegroundColor DarkYellow
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $supervisorOut = Join-Path $logDir "supervisor.log"
 $supervisorErr = Join-Path $logDir "supervisor.error.log"
-$hostProcess = Start-Process powershell.exe `
-  -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$supervisor`"", "-Root", "`"$root`"") `
-  -WindowStyle Hidden -RedirectStandardOutput $supervisorOut -RedirectStandardError $supervisorErr -PassThru
+$node = (Get-Command node.exe -ErrorAction Stop).Source
+$previousAutoShutdown = $env:GRIMOIRE_AUTO_SHUTDOWN
+try {
+  if ($Persistent) { $env:GRIMOIRE_AUTO_SHUTDOWN = "0" }
+  else { Remove-Item Env:GRIMOIRE_AUTO_SHUTDOWN -ErrorAction SilentlyContinue }
+  $hostProcess = Start-Process $node `
+    -ArgumentList @("`"$supervisor`"", "`"$root`"") `
+    -WindowStyle Hidden -RedirectStandardOutput $supervisorOut -RedirectStandardError $supervisorErr -PassThru
+} finally {
+  if ($null -eq $previousAutoShutdown) { Remove-Item Env:GRIMOIRE_AUTO_SHUTDOWN -ErrorAction SilentlyContinue }
+  else { $env:GRIMOIRE_AUTO_SHUTDOWN = $previousAutoShutdown }
+}
 
 $ready = $false
 for ($i = 0; $i -lt 120 -and -not $ready; $i++) {
   try {
-    Invoke-RestMethod -Uri "http://127.0.0.1:7777/health" -TimeoutSec 2 | Out-Null
+    Invoke-RestMethod -Uri "http://127.0.0.1:$gamePort/health" -TimeoutSec 2 | Out-Null
     Invoke-RestMethod -Uri "http://127.0.0.1:5173" -TimeoutSec 2 | Out-Null
     $ready = $true
   } catch {
@@ -62,7 +74,11 @@ if (-not $ready) {
 
 Write-Host ""
 Write-Host "  Running quietly in the background: http://localhost:5173" -ForegroundColor Cyan
-Write-Host "  Closing the final browser tab stops the stack after 15 seconds." -ForegroundColor DarkGray
+if ($Persistent) {
+  Write-Host "  Persistent mode is enabled; use .\stop.ps1 to stop the stack." -ForegroundColor DarkGray
+} else {
+  Write-Host "  Closing the final browser tab stops the stack after 15 seconds." -ForegroundColor DarkGray
+}
 Write-Host "  Manual stop: .\stop.ps1   Logs: var\logs\" -ForegroundColor DarkGray
 Write-Host "  Reset the campaign: delete var\grimoire.db" -ForegroundColor DarkGray
 Write-Host ""

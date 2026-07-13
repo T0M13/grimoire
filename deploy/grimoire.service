@@ -1,0 +1,17 @@
+[Unit]
+Description=Grimoire self-hosted game
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=grimoire
+WorkingDirectory=/opt/grimoire
+ExecStart=/opt/grimoire/start.sh --foreground --persistent --skip-setup
+ExecStop=/opt/grimoire/stop.sh
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

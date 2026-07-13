@@ -5,6 +5,7 @@ Runs inside the ComfyUI venv (reuses its torch cu126 install).
   GET  /health                                        -> {"ok": true, "device": "cuda"}
 """
 import io
+import os
 import time
 
 import soundfile as sf
@@ -51,4 +52,4 @@ app.router.add_post("/tts", tts)
 app.router.add_get("/health", health)
 
 if __name__ == "__main__":
-    web.run_app(app, host="127.0.0.1", port=7861, print=None)
+    web.run_app(app, host="127.0.0.1", port=int(os.environ.get("GRIMOIRE_TTS_PORT", "8765")), print=None)

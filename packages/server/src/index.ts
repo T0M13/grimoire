@@ -78,13 +78,15 @@ const server = http.createServer((req, res) => {
     return;
   }
   res.writeHead(200, { "content-type": "text/plain" });
-  res.end("Grimoire game server. Connect the client to ws://<host>:7777/ws");
+  res.end(`Grimoire game server. Connect the client to ws://<host>:${CONFIG.port}/ws`);
 });
 
 const idleShutdownMs = Number(process.env.GRIMOIRE_IDLE_SHUTDOWN_MS ?? "15000");
+const autoShutdown = process.env.GRIMOIRE_AUTO_SHUTDOWN !== "0";
+const bindHost = process.env.GRIMOIRE_BIND_HOST ?? "0.0.0.0";
 const room = new GameRoom({
   idleShutdownMs: Number.isFinite(idleShutdownMs) ? Math.max(1_000, idleShutdownMs) : 15_000,
-  onIdle: () => shutdown("last browser disconnected"),
+  onIdle: autoShutdown ? () => shutdown("last browser disconnected") : undefined,
 });
 const wss = new WebSocketServer({ server, path: "/ws" });
 
@@ -117,8 +119,9 @@ wss.on("connection", ws => {
   ws.on("close", () => room.removeClient(ws));
 });
 
-server.listen(CONFIG.port, async () => {
-  console.log(`Grimoire server on http://localhost:${CONFIG.port} (ws path /ws)`);
+server.listen(CONFIG.port, bindHost, async () => {
+  console.log(`Grimoire server on http://${bindHost}:${CONFIG.port} (ws path /ws)`);
+  console.log(`- Lifecycle: ${autoShutdown ? "stop after final browser disconnect" : "persistent server"}`);
   console.log(`- Ollama model: ${CONFIG.dmModel} (preloading...)`);
   void warmUp().then(() => console.log("- DM brain warm"));
   console.log(`- ComfyUI: ${(await comfyAvailable()) ? "connected" : "NOT RUNNING (scene art disabled)"}`);

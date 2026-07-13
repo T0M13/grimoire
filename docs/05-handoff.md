@@ -29,8 +29,10 @@ multiplayer lobby/seat/spotlight feature set remains Phase 3 work.
 - Table-wide narrator selection persisted in campaign state.
 - Continuous SQLite campaign persistence plus named host-local save/load/delete slots.
 - Disconnect autosave. Closing/disconnecting the final browser also aborts in-flight TTS.
-- Hidden host supervisor with per-service logs and automatic cleanup 15 seconds after the final
-  browser disconnects; reconnecting during the grace period cancels shutdown.
+- Cross-platform host supervisor with per-service logs and automatic cleanup 15 seconds after
+  the final browser disconnects; reconnecting during the grace period cancels shutdown.
+- Linux server mode binds the web UI/game API for remote clients while keeping model sidecars
+  private on loopback; persistent mode and a systemd unit template support always-on hosts.
 - New-game flow that keeps named saves and the selected narrator available.
 
 ## Fresh-clone setup
@@ -43,6 +45,18 @@ and LCM-LoRA, starts Ollama, and pulls `llama3.1:8b`. Expensive steps are skippe
 Run `./setup.ps1 -Check` for a read-only readiness report. The first setup needs a stable internet
 connection, roughly 10 GB of free disk space, and several minutes for model downloads. The target
 host is Windows 11 with an NVIDIA RTX 4070 12 GB; CPU narration remains possible but slower.
+
+Linux hosts run `./start.sh`; use `./start.sh --persistent` for an always-on server. `setup.sh`
+supports Debian/Ubuntu, Fedora, and Arch-family distributions on x86-64 and ARM64, provisions a
+local Node.js 22 runtime if necessary, and otherwise mirrors the Windows bootstrap. It selects
+CUDA 12.6 PyTorch when NVIDIA is detected and CPU wheels otherwise; override with
+`GRIMOIRE_TORCH_INDEX_URL`. `deploy/grimoire.service` is a systemd template whose user/path must
+be adapted after running setup once. The application has no built-in authentication or TLS, so
+remote access should be through a trusted LAN/VPN or an authenticated HTTPS reverse proxy.
+For split-origin proxy deployments, `VITE_GAME_ORIGIN=https://game.example.com` controls the
+client's HTTPS/WSS game endpoint. `GRIMOIRE_BIND_HOST` restricts the default `0.0.0.0` listeners.
+The defaults are web `5173`, game `8787`, narrator `8765`, ComfyUI `8188`, and Ollama `11434`;
+`GRIMOIRE_GAME_PORT` and `GRIMOIRE_TTS_PORT` override the two Grimoire-owned backend ports.
 
 Downloaded runtimes, model weights, databases, generated media, and setup markers are excluded
 from Git. They live under `vendor/` and `var/` and are reproducible or machine-local.
@@ -57,10 +71,12 @@ from Git. They live under `vendor/` and `var/` and are reproducible or machine-l
 - `packages/server/src/db.ts`: SQLite write-through campaign, event log, and save slots.
 - `packages/client/src/useGame.ts`: WebSocket/reconnect state and narration audio engine.
 - `packages/client/src/App.tsx`: character creation, game screen, sheet, and settings UI.
-- `setup.ps1`: reproducible local runtime/model bootstrap.
-- `start.ps1`: one-command setup and hidden-host launcher.
-- `stop.ps1`: authenticated localhost shutdown with process-tree fallback.
-- `tools/host/supervisor.ps1`: owns Grimoire processes, logs, and lifecycle cleanup.
+- `setup.ps1` / `setup.sh`: reproducible Windows/Linux runtime and model bootstraps.
+- `start.ps1` / `start.sh`: one-command launchers; `--persistent` is the Linux server mode.
+- `stop.ps1` / `stop.sh`: authenticated localhost shutdown with process-tree fallback.
+- `tools/host/supervisor.mjs`: cross-platform process ownership, logs, and lifecycle cleanup.
+- `tools/host/stop.mjs`: shared graceful-stop and forced process-tree fallback.
+- `deploy/grimoire.service`: example persistent Linux systemd service.
 
 ## Persistence and control boundaries
 
@@ -78,6 +94,7 @@ Before handing off a change:
 npm test
 npm run typecheck
 ./setup.ps1 -Check
+# Linux: ./setup.sh --check
 ```
 
 For live-stack changes, also run `node spikes/e2e-smoke.mjs` and manually test the relevant UI.

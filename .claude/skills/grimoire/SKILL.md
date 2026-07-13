@@ -53,15 +53,19 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
 - Sidecars (HTTP, may be down — text-only mode must always work):
   - Ollama `:11434` (llama3.1:8b, constrained JSON via `format`)
   - ComfyUI `:8188` headless (`spikes/run-comfy.ps1`; install at `vendor/ComfyUI` with own venv)
-  - Kokoro TTS `:7861` (`tools/tts-sidecar/server.py`, runs on CUDA inside the ComfyUI venv)
+  - Kokoro TTS `:8765` (`tools/tts-sidecar/server.py`, runs on CUDA inside the ComfyUI venv)
 
 ## Commands
 
 - `npm test` (vitest, all packages) · `npm run typecheck` (tsc strict, whole repo)
-- Fresh clone/readiness: `.\start.ps1` installs then launches · `.\setup.ps1 -Check` is read-only
-- Host lifecycle: services are hidden and supervised; `.\stop.ps1` stops immediately, while the
-  final browser disconnect triggers automatic cleanup after a 15-second reconnect grace period.
-- `npm run dev:server` (:7777) · `npm run dev:client` (Vite :5173, `--host` for LAN)
+- Fresh clone/readiness: Windows `.\start.ps1` / `.\setup.ps1 -Check`; Linux `./start.sh` /
+  `./setup.sh --check`. Both bootstrap the local runtime/model stack idempotently.
+- Host lifecycle: services are backgrounded and supervised; `.\stop.ps1` or `./stop.sh` stops
+  immediately. Desktop mode cleans up after the final browser disconnect; Linux
+  `./start.sh --persistent` (or Windows `.\start.ps1 -Persistent`) stays available as a server.
+- Linux systemd: adapt `deploy/grimoire.service` after setup. Only ports 5173/8787 are remotely
+  bound; keep model sidecars private and use LAN/VPN or authenticated TLS proxy access.
+- `npm run dev:server` (:8787) · `npm run dev:client` (Vite :5173, `--host` for LAN)
 - Sidecars: `powershell spikes/run-comfy.ps1` · `vendor\ComfyUI\venv\Scripts\python.exe tools\tts-sidecar\server.py`
 - E2E: `node spikes/e2e-smoke.mjs` (drives join → campaign → action → roll over ws)
 - Reset campaign: delete `var/grimoire.db*` (generated art/audio cache lives in `var/assets/`)

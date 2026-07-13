@@ -11,12 +11,12 @@ export const MUSIC_DIR = path.join(ASSET_DIR, "music");
 export const DB_PATH = path.join(VAR_DIR, "grimoire.db");
 
 export const CONFIG = {
-  port: 7777,
+  port: Number(process.env.GRIMOIRE_GAME_PORT ?? "8787"),
   ollamaUrl: "http://127.0.0.1:11434",
   dmModel: "llama3.1:8b",
   numCtx: 4096, // our prompts are ~1-2k tokens; smaller KV cache = ~0.6 GB VRAM saved
   comfyUrl: "http://127.0.0.1:8188",
-  ttsUrl: "http://127.0.0.1:7861",
+  ttsUrl: `http://127.0.0.1:${process.env.GRIMOIRE_TTS_PORT ?? "8765"}`,
   // best-in-class Kokoro narrators: af_heart is the only grade-A voice;
   // bm_fable is the warm British "storyteller" voice
   narratorVoices: { male: "bm_fable", female: "af_heart" } as Record<"male" | "female", string>,

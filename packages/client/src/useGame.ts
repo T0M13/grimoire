@@ -1,8 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CheckRequest, ClientMessage, PublicState, RollResult, ServerMessage } from "@grimoire/shared";
 
-const SERVER = `${location.hostname}:7777`;
-export const assetUrl = (path: string) => `http://${SERVER}${path}`;
+const GAME_ORIGIN = new URL(
+  (import.meta.env.VITE_GAME_ORIGIN as string | undefined)
+    ?? `${location.protocol}//${location.hostname}:${import.meta.env.VITE_GAME_PORT ?? "8787"}`,
+);
+export const assetUrl = (path: string) => new URL(path, GAME_ORIGIN).toString();
+
+function gameSocketUrl(): string {
+  const url = new URL("/ws", GAME_ORIGIN);
+  url.protocol = GAME_ORIGIN.protocol === "https:" ? "wss:" : "ws:";
+  return url.toString();
+}
 
 export interface GameConnection {
   connected: boolean;
@@ -119,7 +128,7 @@ export function useGame(): GameConnection {
     let retry = 0;
 
     function connect() {
-      const ws = new WebSocket(`ws://${SERVER}/ws`);
+      const ws = new WebSocket(gameSocketUrl());
       wsRef.current = ws;
 
       ws.onopen = () => {

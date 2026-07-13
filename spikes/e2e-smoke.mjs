@@ -1,10 +1,10 @@
 // End-to-end smoke test: connects as a player, starts a campaign, takes an action,
 // answers a roll request if one comes, and reports every latency that matters.
-// Prereqs: ollama running, ComfyUI on :8188, TTS sidecar on :7861, game server on :7777.
+// Prereqs: ollama running, ComfyUI on :8188, TTS sidecar on :8765, game server on :8787.
 // Run: node spikes/e2e-smoke.mjs
 import WebSocket from "ws";
 
-const ws = new WebSocket("ws://127.0.0.1:7777/ws");
+const ws = new WebSocket(`ws://127.0.0.1:${process.env.GRIMOIRE_GAME_PORT ?? "8787"}/ws`);
 const t = () => performance.now();
 let phase = "connect";
 let phaseStart = t();
