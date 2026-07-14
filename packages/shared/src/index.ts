@@ -116,6 +116,8 @@ export const NpcSpeakerSchema = z.object({
   /** Selects the closest available voice family; creatures may still use either family. */
   sex: SexSchema,
   entityType: z.enum(["person", "creature"]).default("person"),
+  /** Required from new DM moves; absent on legacy saves means "not established". */
+  adult: z.boolean().optional(),
   personality: z.string().min(1).max(100),
   /** Stable visual description ("scarred old dockworker, gray stubble") for portrait continuity. */
   appearance: z.string().min(1).max(140),
@@ -171,11 +173,30 @@ export const QuestUpdateSchema = z.object({
 });
 export type QuestUpdate = z.infer<typeof QuestUpdateSchema>;
 
+export const RELATIONSHIP_EVENTS = [
+  "none", "met", "helped", "bonded", "offended", "threatened", "harmed", "betrayed",
+  "mutual_romance", "romance_ended",
+] as const;
+export const RelationshipEventSchema = z.enum(RELATIONSHIP_EVENTS);
+export type RelationshipEvent = z.infer<typeof RelationshipEventSchema>;
+
+/** A structured intent only; the server applies fixed deltas after any required roll. */
+export const RelationshipUpdateSchema = z.object({
+  playerName: z.string().min(1).max(40),
+  npcName: z.string().min(1).max(60),
+  reason: z.string().min(1).max(160),
+  immediate: RelationshipEventSchema,
+  onSuccess: RelationshipEventSchema,
+  onFailure: RelationshipEventSchema,
+});
+export type RelationshipUpdate = z.infer<typeof RelationshipUpdateSchema>;
+
 export const DmMoveSchema = z.object({
   move: z.enum(["narrate", "request_check", "change_scene", "give_item"]),
   mood: MoodSchema.optional(),
   npc: NpcSpeakerSchema.optional(),
   quest: QuestUpdateSchema.optional(),
+  relationship: RelationshipUpdateSchema.optional(),
   check: CheckIntentSchema.optional(),
   scene: z
     .object({
@@ -206,10 +227,11 @@ export const DM_MOVE_JSON_SCHEMA = {
         name: { type: "string", maxLength: 60 },
         sex: { type: "string", enum: ["male", "female"] },
         entityType: { type: "string", enum: ["person", "creature"] },
+        adult: { type: "boolean" },
         personality: { type: "string", maxLength: 100 },
         appearance: { type: "string", maxLength: 140 },
       },
-      required: ["name", "sex", "entityType", "personality", "appearance"],
+      required: ["name", "sex", "entityType", "adult", "personality", "appearance"],
     },
     quest: {
       type: "object",
@@ -221,6 +243,18 @@ export const DM_MOVE_JSON_SCHEMA = {
         isMain: { type: "boolean" },
       },
       required: ["action", "title", "objective", "summary", "isMain"],
+    },
+    relationship: {
+      type: "object",
+      properties: {
+        playerName: { type: "string", maxLength: 40 },
+        npcName: { type: "string", maxLength: 60 },
+        reason: { type: "string", maxLength: 160 },
+        immediate: { type: "string", enum: [...RELATIONSHIP_EVENTS] },
+        onSuccess: { type: "string", enum: [...RELATIONSHIP_EVENTS] },
+        onFailure: { type: "string", enum: [...RELATIONSHIP_EVENTS] },
+      },
+      required: ["playerName", "npcName", "reason", "immediate", "onSuccess", "onFailure"],
     },
     check: {
       type: "object",
@@ -250,10 +284,11 @@ export const DM_MOVE_JSON_SCHEMA = {
               name: { type: "string", maxLength: 60 },
               sex: { type: "string", enum: ["male", "female"] },
               entityType: { type: "string", enum: ["person", "creature"] },
+              adult: { type: "boolean" },
               personality: { type: "string", maxLength: 100 },
               appearance: { type: "string", maxLength: 140 },
             },
-            required: ["name", "sex", "entityType", "personality", "appearance"],
+            required: ["name", "sex", "entityType", "adult", "personality", "appearance"],
           },
         },
         imagePrompt: { type: "string" },
@@ -285,6 +320,9 @@ export const RollResultSchema = z.object({
 export type RollResult = z.infer<typeof RollResultSchema>;
 
 // ---------- Wire protocol ----------
+
+export const ContentToneSchema = z.enum(["standard", "mature"]);
+export type ContentTone = z.infer<typeof ContentToneSchema>;
 
 /** Client -> server */
 export const ClientMessageSchema = z.discriminatedUnion("type", [
@@ -324,6 +362,7 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("new_campaign"), premise: z.string().max(300).optional() }),
   z.object({ type: z.literal("set_voice"), voice: SexSchema }),
   z.object({ type: z.literal("set_art_style"), style: z.enum(["painting", "sketch", "cinematic"]) }),
+  z.object({ type: z.literal("set_content_tone"), tone: ContentToneSchema }),
   z.object({ type: z.literal("save_slot"), name: z.string().min(1).max(40) }),
   z.object({ type: z.literal("load_slot"), id: z.number().int() }),
   z.object({ type: z.literal("delete_slot"), id: z.number().int() }),
@@ -405,6 +444,18 @@ export interface NpcVoiceProfile extends NpcSpeaker {
   portraitUrls?: Partial<Record<ArtStyle, string>>;
 }
 
+export type RelationshipStatus = "acquaintance" | "friend" | "trusted" | "rival" | "hostile" | "romantic";
+
+/** One hero's durable relationship with one named NPC. No record means Stranger. */
+export interface NpcRelationship {
+  npcName: string;
+  trust: number;
+  affection: number;
+  status: RelationshipStatus;
+  note: string;
+  updatedAt: string;
+}
+
 export interface SaveMeta {
   id: number;
   name: string;
@@ -423,10 +474,15 @@ export interface PublicState {
   suggestedActions: string[];
   pendingCheck: CheckRequest | null;
   pendingNpc: NpcSpeaker | null;
+  /** Server recovery state. Outbound snapshots always redact an unresolved branch to null. */
+  pendingRelationship: RelationshipUpdate | null;
   dmBusy: boolean;
   narratorVoice: Sex;
   artStyle: ArtStyle;
+  contentTone: ContentTone;
   quests: Quest[];
   npcVoices: Record<string, NpcVoiceProfile>;
+  /** Character id -> normalized NPC name -> relationship. */
+  npcRelationships: Record<string, Record<string, NpcRelationship>>;
   saves: SaveMeta[];
 }

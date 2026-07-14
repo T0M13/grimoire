@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ClientMessage, PartyPresence, ServerMessage } from "@grimoire/shared";
+import type { ClientMessage, PartyPresence, PublicState, ServerMessage } from "@grimoire/shared";
 import type { WebSocket } from "ws";
 
 vi.mock("./db.js", () => ({
@@ -23,7 +23,7 @@ vi.mock("./media.js", () => ({
   synthesize: vi.fn(async () => null),
 }));
 
-import { castNpcVoice, GameRoom } from "./game.js";
+import { applyRelationshipEvent, castNpcVoice, GameRoom } from "./game.js";
 import { decideMove } from "./dm.js";
 import { getNpcPortrait } from "./media.js";
 import { loadCampaign, loadSlot } from "./db.js";
@@ -79,6 +79,46 @@ describe("shared-room multiplayer foundation", () => {
     expect(latestPresence(alice).map(member => [member.playerName, member.online, member.activity])).toEqual([
       ["Alice", true, "ready"], ["Borin", true, "ready"],
     ]);
+  });
+
+  it("lets a joined hero set the shared content tone but rejects outsiders and mid-turn changes", async () => {
+    const room = new GameRoom();
+    rooms.push(room);
+    const alice = new FakeSocket();
+    const outsider = new FakeSocket();
+    room.addClient(alice as unknown as WebSocket);
+    room.addClient(outsider as unknown as WebSocket);
+
+    await room.handle(outsider as unknown as WebSocket, { type: "set_content_tone", tone: "mature" });
+    expect(outsider.messages.at(-1)).toEqual({
+      type: "error", message: "Join the table before changing shared content settings.",
+    });
+
+    await room.handle(alice as unknown as WebSocket, joinMessage("Alice"));
+    await room.handle(alice as unknown as WebSocket, { type: "set_content_tone", tone: "mature" });
+    expect(room.state.contentTone).toBe("mature");
+    expect(latestState(outsider)?.contentTone).toBe("mature");
+
+    room.state.dmBusy = true;
+    await room.handle(alice as unknown as WebSocket, { type: "set_content_tone", tone: "standard" });
+    expect(alice.messages.at(-1)).toEqual({ type: "error", message: "Wait for the storyteller to finish." });
+    expect(room.state.contentTone).toBe("mature");
+  });
+
+  it("hydrates old saves with safe content and relationship defaults", () => {
+    const seed = new GameRoom();
+    const legacy = structuredClone(seed.state) as Partial<PublicState>;
+    seed.shutdown();
+    delete legacy.contentTone;
+    delete legacy.pendingRelationship;
+    delete legacy.npcRelationships;
+    vi.mocked(loadCampaign).mockReturnValue({ state: legacy as PublicState, history: [] });
+
+    const room = new GameRoom();
+    rooms.push(room);
+    expect(room.state.contentTone).toBe("standard");
+    expect(room.state.pendingRelationship).toBeNull();
+    expect(room.state.npcRelationships).toEqual({});
   });
 
   it("keeps the roster visible and marks a hero offline after their last tab leaves", async () => {
@@ -159,11 +199,20 @@ describe("shared-room multiplayer foundation", () => {
     await room.handle(borin as unknown as WebSocket, joinMessage("Borin"));
     const loadedState = structuredClone(room.state);
     loadedState.party = loadedState.party.filter(hero => hero.name === "Alice");
+    loadedState.contentTone = "mature";
+    loadedState.npcRelationships[loadedState.party[0]!.id] = {
+      mara: {
+        npcName: "Mara", trust: 24, affection: 8, status: "friend",
+        note: "Alice helped Mara twice.", updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    };
     vi.mocked(loadSlot).mockReturnValue({ state: loadedState, history: [] });
 
     await room.handle(borin as unknown as WebSocket, { type: "load_slot", id: 7 });
 
     expect(borin.messages).toContainEqual({ type: "journey_ready", action: "load", saveId: 7 });
+    expect(latestState(alice)?.contentTone).toBe("mature");
+    expect(latestState(alice)?.npcRelationships[loadedState.party[0]!.id]?.mara?.status).toBe("friend");
     expect(latestPresence(alice).map(member => member.playerName)).toEqual(["Alice"]);
     await room.handle(borin as unknown as WebSocket, { type: "action", mode: "act", text: "Keep acting as Borin" });
     expect(borin.messages.at(-1)).toEqual({ type: "error", message: "Join the game first." });
@@ -190,10 +239,13 @@ describe("shared-room multiplayer foundation", () => {
     const alice = new FakeSocket();
     room.addClient(alice as unknown as WebSocket);
     await room.handle(alice as unknown as WebSocket, joinMessage("Alice"));
+    room.state.contentTone = "mature";
 
     await room.handle(alice as unknown as WebSocket, { type: "new_game" });
 
-    expect(latestState(alice)).toMatchObject({ party: [], scene: { kind: "fireside" } });
+    expect(latestState(alice)).toMatchObject({
+      party: [], scene: { kind: "fireside" }, contentTone: "standard", npcRelationships: {},
+    });
     expect(latestPresence(alice)).toEqual([]);
     expect(alice.messages.at(-1)).toEqual({ type: "journey_ready", action: "new" });
   });
@@ -266,6 +318,119 @@ describe("shared-room multiplayer foundation", () => {
       .toBe("/assets/img/npc-mossback--painting--test.png");
     expect(latestState(alice)?.npcVoices.mossback?.portraitUrls?.painting)
       .toBe("/assets/img/npc-mossback--painting--test.png");
+  });
+
+  it("tracks one hero's immediate NPC relationship without changing a teammate's", async () => {
+    vi.mocked(decideMove).mockResolvedValue({
+      move: "narrate",
+      npc: {
+        name: "Mara", sex: "female", entityType: "person", adult: true,
+        personality: "wary but warm", appearance: "weathered ferryman in a moss-green coat",
+      },
+      relationship: {
+        playerName: "Alice", npcName: "Mara", reason: "Alice returned Mara's stolen compass.",
+        immediate: "helped", onSuccess: "none", onFailure: "none",
+      },
+      suggestedActions: [],
+    });
+    const room = new GameRoom();
+    rooms.push(room);
+    const alice = new FakeSocket();
+    const borin = new FakeSocket();
+    room.addClient(alice as unknown as WebSocket);
+    room.addClient(borin as unknown as WebSocket);
+    await room.handle(alice as unknown as WebSocket, joinMessage("Alice"));
+    await room.handle(borin as unknown as WebSocket, joinMessage("Borin"));
+    room.state.scene.kind = "road";
+
+    await room.handle(alice as unknown as WebSocket, { type: "action", mode: "speak", text: "I found your compass." });
+
+    const aliceId = room.state.party.find(hero => hero.name === "Alice")!.id;
+    const borinId = room.state.party.find(hero => hero.name === "Borin")!.id;
+    expect(room.state.npcRelationships[aliceId]?.mara).toMatchObject({
+      npcName: "Mara", trust: 12, affection: 4, status: "acquaintance",
+    });
+    expect(room.state.npcRelationships[borinId]).toBeUndefined();
+  });
+
+  it("defers a check-dependent relationship outcome until the deterministic roll", async () => {
+    vi.mocked(decideMove).mockResolvedValue({
+      move: "request_check",
+      npc: {
+        name: "Mara", sex: "female", entityType: "person", adult: true,
+        personality: "wary but warm", appearance: "weathered ferryman in a moss-green coat",
+      },
+      check: {
+        playerName: "Alice", skill: "Athletics", difficulty: "nearly_impossible",
+        reason: "Stop Mara from escaping",
+      },
+      relationship: {
+        playerName: "Alice", npcName: "Mara", reason: "Alice tried to restrain Mara.",
+        immediate: "none", onSuccess: "threatened", onFailure: "offended",
+      },
+      suggestedActions: [],
+    });
+    const room = new GameRoom();
+    rooms.push(room);
+    const alice = new FakeSocket();
+    room.addClient(alice as unknown as WebSocket);
+    await room.handle(alice as unknown as WebSocket, joinMessage("Alice"));
+    room.state.scene.kind = "road";
+    const aliceId = room.state.party[0]!.id;
+
+    await room.handle(alice as unknown as WebSocket, { type: "action", mode: "speak", text: "You are not leaving." });
+    expect(room.state.pendingRelationship?.onFailure).toBe("offended");
+    expect(latestState(alice)?.pendingRelationship).toBeNull();
+    expect(room.state.npcRelationships[aliceId]).toBeUndefined();
+
+    await room.handle(alice as unknown as WebSocket, { type: "roll" });
+    expect(room.state.pendingRelationship).toBeNull();
+    expect(room.state.npcRelationships[aliceId]?.mara).toMatchObject({
+      trust: -8, affection: -8, status: "acquaintance",
+    });
+  });
+
+  it("gates mutual romance on mature mode, established bonds, and clearly adult people", async () => {
+    const room = new GameRoom();
+    rooms.push(room);
+    const alice = new FakeSocket();
+    room.addClient(alice as unknown as WebSocket);
+    await room.handle(alice as unknown as WebSocket, joinMessage("Alice"));
+    const aliceHero = room.state.party[0]!;
+    room.state.npcVoices.mara = {
+      name: "Mara", sex: "female", entityType: "person", adult: true,
+      personality: "wary but warm", appearance: "weathered ferryman",
+      voice: "af_bella", portraitUrls: {},
+    };
+    room.state.npcRelationships[aliceHero.id] = {
+      mara: {
+        npcName: "Mara", trust: 20, affection: 25, status: "friend",
+        note: "They trust each other.", updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    };
+    const update = {
+      playerName: "Alice", npcName: "Mara", reason: "They both freely admitted their feelings.",
+      immediate: "mutual_romance", onSuccess: "none", onFailure: "none",
+    } as const;
+
+    expect(applyRelationshipEvent(room.state, update, "mutual_romance")).toBe(false);
+    room.state.contentTone = "mature";
+    aliceHero.age = "young";
+    expect(applyRelationshipEvent(room.state, update, "mutual_romance")).toBe(false);
+    aliceHero.age = "adult";
+    expect(applyRelationshipEvent(room.state, update, "mutual_romance", "2026-01-02T00:00:00.000Z")).toBe(true);
+    expect(room.state.npcRelationships[aliceHero.id]?.mara).toMatchObject({
+      trust: 25, affection: 35, status: "romantic",
+    });
+
+    expect(applyRelationshipEvent(room.state, {
+      ...update,
+      reason: "Alice threatened to hold Mara captive.",
+      immediate: "threatened",
+    }, "threatened", "2026-01-03T00:00:00.000Z")).toBe(true);
+    expect(room.state.npcRelationships[aliceHero.id]?.mara).toMatchObject({
+      trust: 10, affection: 25, status: "friend",
+    });
   });
 
   it("cleans legacy DM text while preserving legacy player text", () => {

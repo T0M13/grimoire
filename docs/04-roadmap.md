@@ -43,6 +43,10 @@ The game is fun for ONE player with text + voice only.
   scene/time/weather scoring, 150-second movement changes, soft crossfades, clean combat/boss
   arrangements, gameplay cues, and independent music/effects controls
 - [x] Explicit Act / Speak / Ask DM input modes with labeled speakers
+- [x] Table-wide Standard/Mature story tone: default-safe, shared opt-in, requested dark humor/gore,
+  adult consensual fade-to-black romance, and immutable consent/age boundaries
+- [x] Per-hero persistent NPC relationships with server-owned trust/affection deltas, deferred
+  roll outcomes, friendship/rivalry/hostility, and conservatively gated mutual romance
 - [x] Persistent per-NPC Kokoro voice identity and bounded delivery rate selected from
   sex/personality descriptors, with no extra model call
 - [x] Non-modal Map, Sheet, Quest, and Settings docks that keep the action composer usable
@@ -100,9 +104,9 @@ The game is fun for ONE player with text + voice only.
 
 ## Phase 6 — Depth & longevity
 - Campaign skeleton/arc system with hidden outline revision
-- Vector memory recall (sqlite-vec); NPC attitude tracking
+- Vector memory recall (sqlite-vec); deeper NPC memories, favors, factions, and relationship arcs
 - Level-up ceremonies, spellcasting (SRD subset), rests, shops/economy basics
-- Content-safety preferences; host DM-override console
+- Per-topic lines/veils, host-only content controls, and DM-override console
 - Launcher app (one-click boot of all services, VRAM auto-profile)
 
 ## Later / icebox

@@ -6,9 +6,25 @@ import { generateJson, generateStream, type ChatMessage } from "./ollama.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SYSTEM_PROMPT = fs.readFileSync(path.join(here, "..", "prompts", "dm-system.md"), "utf8");
+const STANDARD_CONTENT_PROMPT = fs.readFileSync(path.join(here, "..", "prompts", "content-standard.md"), "utf8");
+const MATURE_CONTENT_PROMPT = fs.readFileSync(path.join(here, "..", "prompts", "content-mature.md"), "utf8");
 
 function stateBlock(state: PublicState): string {
+  const partyById = new Map(state.party.map(character => [character.id, character.name]));
+  const relationships = Object.entries(state.npcRelationships ?? {})
+    .flatMap(([characterId, byNpc]) => Object.values(byNpc).map(relationship => ({
+      player: partyById.get(characterId) ?? characterId,
+      npc: relationship.npcName,
+      trust: relationship.trust,
+      affection: relationship.affection,
+      status: relationship.status,
+      note: relationship.note,
+      updatedAt: relationship.updatedAt,
+    })))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, 40);
   const compact = {
+    contentTone: state.contentTone ?? "standard",
     scene: {
       name: state.scene.name, kind: state.scene.kind, timeOfDay: state.scene.timeOfDay,
       weather: state.scene.weather, mood: state.scene.mood,
@@ -32,9 +48,10 @@ function stateBlock(state: PublicState): string {
       title: q.title, objective: q.objective, summary: q.summary, status: q.status, isMain: q.isMain,
     })),
     knownNpcs: Object.values(state.npcVoices).map(npc => ({
-      name: npc.name, sex: npc.sex, entityType: npc.entityType,
+      name: npc.name, sex: npc.sex, entityType: npc.entityType, adult: npc.adult ?? "unknown",
       personality: npc.personality, appearance: npc.appearance,
     })),
+    relationships,
   };
   return `PRIVATE CAMPAIGN STATE (authoritative - do not contradict or quote field names):\n${JSON.stringify(compact, null, 1)}`;
 }
@@ -166,14 +183,15 @@ export function buildMessages(
   viewpointName?: string,
 ): ChatMessage[] {
   const viewpoint = viewpointName ? `\n\n${viewpointInstruction(viewpointName)}` : "";
+  const contentPrompt = state.contentTone === "mature" ? MATURE_CONTENT_PROMPT : STANDARD_CONTENT_PROMPT;
   return [
-    { role: "system", content: `${SYSTEM_PROMPT}\n\n${stateBlock(state)}` },
+    { role: "system", content: `${SYSTEM_PROMPT}\n\n${contentPrompt}\n\n${stateBlock(state)}` },
     ...history.slice(-20),
     { role: "user", content: `${instruction}${viewpoint}` },
   ];
 }
 
-const MOVE_INSTRUCTION = `ENGINE: Choose your next DM move for the situation above. Respond ONLY with the JSON object.
+export const MOVE_INSTRUCTION = `ENGINE: Choose your next DM move for the situation above. Respond ONLY with the JSON object.
 - "request_check": ONLY for a real gamble - the attempt must have (1) genuine opposition, danger,
   or time pressure AND (2) an interesting consequence on failure. Climbing a crumbling wall while
   guards approach: roll. Persuading a hostile jailer: roll. Sneaking past a sentry: roll.
@@ -182,6 +200,16 @@ const MOVE_INSTRUCTION = `ENGINE: Choose your next DM move for the situation abo
   find, no roll. If a player needs a piece of information for the story to move, GIVE it to them.
   Never ask to re-roll the same failed attempt; the failure already changed the situation.
   Fill "check" with a difficulty category; never calculate or output a numerical DC.
+- ENTERTAIN CREATIVE PLANS, including odd, funny, criminal, or dark plans, when they are physically
+  possible. Do not refuse merely because a plan is unusual or morally dubious. The world reacts.
+  An actually impossible attempt fails plainly without a roll; do not pretend dice can break reality.
+  Capturing an alert, resisting enemy has real opposition and normally needs an approach-matching
+  check: Athletics for physical restraint, Stealth for an unseen abduction, or a social skill to lure
+  or secure surrender. Choose hard or very hard when the opposition truly warrants it, but lower it
+  for strong leverage and skip a redundant roll for a helpless or freely surrendering target.
+  Failure must create escape, alarm, injury, hostility, lost position, or another playable route.
+  Interrogation itself is conversation; request a social check only when a lie, threat, or bargain has
+  meaningful stakes. Never hide a required main-quest clue behind the roll.
 - "change_scene": MOVEMENT IS SACRED. If the last player action states or implies going somewhere
   (enter, leave, go through, step in, follow, travel, descend, flee), you MUST choose change_scene
   NOW and put them in the new place - never answer movement with more description of the current
@@ -207,6 +235,20 @@ Quest text must be SIMPLE enough for a child or a non-native English speaker:
   a verb ("Find out who broke into the stall.", "Talk to the captain at the docks.").
 - "summary": ONE short plain sentence about why it matters ("A thief is stealing from the market.").
 Never use abstract words like "hook", "lead", "immediate", "investigate the situation".
+Use optional "relationship" only when the ACTIVE player's interaction meaningfully changes one
+named NPC's attitude. The server owns the numbers; choose only these events:
+- met: first meaningful exchange; helped: useful or kind act; bonded: earned personal closeness;
+- offended: insult or broken boundary; threatened: credible intimidation or captivity;
+- harmed: direct harm; betrayed: serious broken trust;
+- mutual_romance: both clearly adult people freely reciprocate after an established bond;
+- romance_ended: either person ends it; none: no change.
+For a move with no check, set "immediate" and set both roll outcomes to none. For request_check,
+set immediate to none and choose onSuccess/onFailure; the server waits for the real roll. Never use
+mutual_romance in Standard mode, for a young player character, for a creature, for an NPC whose
+adult status is unknown/false, or to override refusal. Do not reward repetitive small talk. Keep the
+reason to one short established fact. Relationship changes are per player, not party-wide.
+Mutual romance and ending romance are free consent decisions: emit them only as immediate events,
+never as the success or failure result of a die roll.
 Set optional "mood" when the scene's emotional state changes. Use "combat" when a fight
 starts, "boss" for a climactic enemy, "victory" when a major encounter ends, and return to the
 best fitting ambient mood after danger passes. Omit it when the mood has not changed.
@@ -225,16 +267,48 @@ export async function decideMove(state: PublicState, history: ChatMessage[], pla
   return { move: "narrate", suggestedActions: [] };
 }
 
-function semanticallyValid(move: DmMove, state: PublicState, playerAction: string): boolean {
+export function semanticallyValid(move: DmMove, state: PublicState, playerAction: string): boolean {
   const partyNames = new Set(state.party.map(c => c.name.toLowerCase()));
-  if (move.npc && partyNames.has(move.npc.name.toLowerCase())) return false;
+  if (move.npc && !npcMetadataValid(move.npc, state, partyNames)) return false;
+  if (move.scene?.occupants.some(subject => !npcMetadataValid(subject, state, partyNames))) return false;
   if (playerAction.includes("INTERACTION MODE: SPEAK") && !move.npc) return false;
+  if (move.relationship) {
+    const playerKnown = partyNames.has(move.relationship.playerName.toLowerCase());
+    const targetKey = npcKeyForValidation(move.relationship.npcName);
+    const moveNpcMatches = move.npc && npcKeyForValidation(move.npc.name) === targetKey;
+    if (!playerKnown || partyNames.has(move.relationship.npcName.toLowerCase())
+      || (!moveNpcMatches && !state.npcVoices[targetKey])) return false;
+    if (move.move === "request_check" && move.check
+      && move.relationship.playerName.toLowerCase() !== move.check.playerName.toLowerCase()) return false;
+    if (move.move === "request_check" && [move.relationship.onSuccess, move.relationship.onFailure]
+      .some(event => event === "mutual_romance" || event === "romance_ended"))
+      return false;
+    if (move.move === "request_check" ? move.relationship.immediate !== "none"
+      : move.relationship.onSuccess !== "none" || move.relationship.onFailure !== "none") return false;
+  }
   if (move.move === "request_check")
     return !!move.check && partyNames.has(move.check.playerName.toLowerCase());
   if (move.move === "change_scene") return !!move.scene;
   if (move.move === "give_item")
     return !!move.item && partyNames.has(move.item.playerName.toLowerCase());
   return true;
+}
+
+function npcKeyForValidation(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function npcMetadataValid(
+  subject: NonNullable<DmMove["npc"]>,
+  state: PublicState,
+  partyNames: Set<string>,
+): boolean {
+  if (partyNames.has(subject.name.toLowerCase())) return false;
+  const known = state.npcVoices[npcKeyForValidation(subject.name)];
+  if (known?.adult !== undefined && subject.adult !== undefined && known.adult !== subject.adult)
+    return false;
+  return !(subject.adult === true
+    && /\b(child|minor|teenager|adolescent|young boy|young girl|little boy|little girl)\b/i.test(subject.appearance));
 }
 
 /** Pass 2: streamed narration of the chosen move / mechanical result. */

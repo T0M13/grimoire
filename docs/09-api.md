@@ -41,13 +41,14 @@ a healthy host.
 | `roll` | Answer the pending check that names your character. |
 | `set_voice` | `{voice:"male"\|"female"}` — table-wide narrator. |
 | `set_art_style` | `{style:"painting"\|"sketch"\|"cinematic"}` — table-wide scene and subject style. |
+| `set_content_tone` | `{tone:"standard"\|"mature"}` — joined-player, table-wide story mode; rejected while the DM is busy. |
 | `save_slot` / `load_slot` / `delete_slot` / `new_game` | Host-local save management. |
 
 ## Server → client messages
 
 | type | Meaning |
 |---|---|
-| `state` | Full authoritative snapshot (`PublicState`): scene and visible occupants, party, NPC voice/portrait profiles, quests, log, pending check, and saves. Sent on connect and after every change. |
+| `state` | Full authoritative snapshot (`PublicState`): scene and visible occupants, party, NPC voice/portrait profiles, per-hero NPC relationships, shared content tone, quests, log, pending check, and saves. Sent on connect and after every change. |
 | `party_presence` | Transient online/activity roster (`Ready`, `Acting`, `Speaking`, `Asking DM`, `Rolling`, `Following`). It is not written into campaign saves. |
 | `journey_ready` | Direct acknowledgement after the requesting socket successfully resets or loads the shared table. |
 | `narration_start` / `narration_chunk` / `narration_end` | The DM's beat, streamed token-by-token, with the active speaker (storyteller or a named NPC). |
@@ -74,8 +75,11 @@ a healthy host.
   shared beat. Everyone receives the same actor-relative narration and audio.
 - Identity is currently the claimed character name plus browser local storage, not an authenticated
   seat token. Two ordinary tabs in one profile attach to the same hero.
-- Save/delete, narrator, and art-style controls are not host-authorized yet. Load/reset requires a
+- Save/delete, narrator, art-style, and content-tone controls are not host-authorized yet. Load/reset requires a
   joined party member once the table is active, but this is still not a real host role.
 - Every narration, NPC conversation, audio sentence, scene, and log entry is public to the room.
+- Mature mode affects the shared text and audio for every tab. Clients should require table agreement
+  before sending it; the browser UI warns the toggling player but cannot verify agreement, and a real
+  host-only permission is not built yet.
 - Do not expose the API directly to the internet. Use a trusted LAN/VPN while invite codes, host
   authorization, seat tokens, and recipient-scoped feeds remain Phase 3 work.

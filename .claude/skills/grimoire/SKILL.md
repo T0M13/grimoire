@@ -38,6 +38,14 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
 8. **Prompts are not enforcement.** Give the narrator authoritative character facts, but guarantee
    mechanics through schemas and `packages/rules`. Ability checks do not auto-succeed/fail on a
    natural 20/1. The model emits a named difficulty; code maps it to DC 5/10/15/20/25/30.
+9. **Mature tone is shared opt-in, not an instruction.** Standard is the default. Mature permits
+   only player-requested dark humor, brief fictional gore, and adult consensual romance; intimacy
+   always fades to black. Never add explicit sexual description, minors, coercion, sexual violence,
+   incest, intoxicated/incapacitated consent, or eroticized captivity. Art remains nonsexual.
+10. **Relationships use fixed reducers.** The model may select a schema event, never trust/affection
+    numbers. Apply immediate events server-side and defer check-dependent events until the real roll.
+    Social checks can affect attitude but never create consent. Mutual romance needs Mature mode,
+    established trust/affection, an adult/elder hero, and an NPC explicitly established as an adult person.
 
 ## Architecture quick map (as implemented)
 
@@ -111,6 +119,10 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
   narration path.
 - Apply quests only from schema-validated `QuestUpdate` intents through the server reducer. Never
   infer quest or mechanical state from narration text.
+- Apply NPC relationships only from schema-validated `RelationshipUpdate` events through the fixed
+  server reducer. Key them by stable character id and normalized NPC name, persist them in campaign
+  state, and never infer them from narration text. Check branches live in `pendingRelationship` until
+  the named player's deterministic roll resolves.
 - Do not implement advancement as free-form points. Read `docs/08-progression-and-content.md`, add
   SRD class-level data and deterministic reducers/tests, then expose only legal pending choices.
 - Keep music and effects non-blocking, browser-local, and disposable on `pagehide`. Scene mood is
@@ -129,7 +141,8 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
   prompt, joined with `--`, lowercase alnum+dash only (Windows-safe filenames).
 - Narration for an active character must be second-person (`you/your`), never their own name or
   third-person pronouns. Parallel dialogue/event design lives in `docs/06-open-world-multiplayer.md`.
-- Prompts live in versioned files (`packages/server/prompts/`), not inline strings.
+- Base/content prompts live in versioned files (`packages/server/prompts/`). Both structured and
+  narration passes must receive the selected Standard/Mature policy and the absolute boundaries.
 - Windows gotchas: PowerShell 5.1 `Get-Content`/`Set-Content` mangles UTF-8 (use Write/Edit
   tools); `|` is illegal in filenames; prefer `curl.exe` over `Invoke-WebRequest` for binaries.
 

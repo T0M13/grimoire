@@ -171,8 +171,17 @@ presentation layer reacts *during* play:
 
 ## 12. Tone & safety
 
-Campaign setup includes content preferences (violence level, horror, romance: fade-to-black,
-lines & veils list). These are injected into the DM system prompt and enforced.
+The shipped table-wide control is **Standard** (default) or **Mature** (shared opt-in). Mature is
+permission, never a direction: dark/gallows humor, brief fictional gore, and adult consensual
+romance appear only after a player deliberately steers there. Intimacy always fades to black.
+Explicit sexual description, minors, coercion, sexual violence, and eroticized captivity remain
+outside the game in every mode. Generated art remains nonsexual.
+
+Creative, criminal, or dark actions are still playable when physically possible. An alert resisting
+target requires a meaningful engine-owned check and consequences; surrendering/helpless targets do
+not get a pointless roll. Social checks can change trust or affection but never manufacture consent.
+Each hero's named-NPC trust, affection, status, and last meaningful relationship beat persist in the
+campaign. A future host/lobby slice should add per-topic lines and veils beyond the current two modes.
 
 ## 13. What this game is NOT (scope guards)
 

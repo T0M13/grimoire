@@ -30,6 +30,19 @@ scopes are already partially designed there).
   minutes and on every scene change, keep the last 5) in the existing saves table, named
   "Autosave — <scene> — <time>". Protects against bad story turns, not just crashes.
 
+## Deeper relationships and adult table controls
+
+- The foundation now persists per-hero NPC trust, affection, status, and one established note with
+  fixed server reducers. Expand it into favors/debts, factions, jealousy, gifts, long memories, and
+  relationship-specific quests without accepting model-authored numbers.
+- Add host-only per-topic lines/veils and a session-zero consent screen. The current Standard/Mature
+  switch is table-wide but not host-authorized because seats/lobby roles do not exist yet.
+- Keep romance adult, mutual, slowly earned, and fade-to-black. Explicit sexual narration, coercion,
+  sexual violence, minors, and sexualized captivity are intentionally not backlog items.
+- Creative capture/interrogation is playable now through general deterministic checks. Full 2014 SRD
+  combat capture needs initiative, attacks, grapple/shove, conditions, escape, and restraint in the
+  Phase 4 encounter engine; do not fake those mechanics in narration.
+
 ## Per-player async progression ("play on while others are offline")
 
 - Every player owns their hero (real seat identity/token, not just a name claim).

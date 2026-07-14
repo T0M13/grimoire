@@ -1,9 +1,10 @@
 import crypto from "node:crypto";
 import type { WebSocket } from "ws";
 import {
-  npcKey, type Character, type CheckRequest, type ClientMessage, type NarrationSpeaker,
-  type NpcSpeaker, type NpcVoiceProfile, type PartyActivity, type PartyPresence, type PublicState,
-  type QuestUpdate, type ServerMessage,
+  npcKey, RelationshipUpdateSchema, type Character, type CheckRequest, type ClientMessage,
+  type NarrationSpeaker, type NpcRelationship, type NpcSpeaker, type NpcVoiceProfile,
+  type PartyActivity, type PartyPresence, type PublicState, type QuestUpdate,
+  type RelationshipEvent, type RelationshipStatus, type RelationshipUpdate, type ServerMessage,
 } from "@grimoire/shared";
 import {
   backgroundRulesById, buildLevelOneCharacter, buildLevelThreeCharacter, classRulesById,
@@ -89,11 +90,123 @@ export function castNpcVoice(npc: NpcSpeaker): { voice: string; speed: number; t
   return { voice, speed: Number(speed.toFixed(2)), tone };
 }
 
+const RELATIONSHIP_EFFECTS: Record<Exclude<RelationshipEvent, "none">, readonly [number, number]> = {
+  met: [0, 0],
+  helped: [12, 4],
+  bonded: [5, 12],
+  offended: [-8, -8],
+  threatened: [-15, -10],
+  harmed: [-25, -15],
+  betrayed: [-35, -25],
+  mutual_romance: [5, 10],
+  romance_ended: [0, -15],
+};
+
+const clampRelationship = (value: number) => Math.max(-100, Math.min(100, Math.round(value)));
+
+export function relationshipStatus(trust: number, affection: number): RelationshipStatus {
+  if (trust <= -50) return "hostile";
+  if (trust <= -20) return "rival";
+  if (trust >= 55) return "trusted";
+  if (trust >= 20 || affection >= 25) return "friend";
+  return "acquaintance";
+}
+
+/** Apply a model-selected event through fixed server-owned rules. */
+export function applyRelationshipEvent(
+  state: PublicState,
+  update: RelationshipUpdate,
+  event: RelationshipEvent,
+  updatedAt = new Date().toISOString(),
+): boolean {
+  if (event === "none") return false;
+  const character = state.party.find(candidate => npcKey(candidate.name) === npcKey(update.playerName));
+  const targetKey = npcKey(update.npcName);
+  const npc = state.npcVoices[targetKey];
+  if (!character || !npc || npcKey(npc.name) === npcKey(character.name)) return false;
+
+  state.npcRelationships ??= {};
+  const byNpc = state.npcRelationships[character.id] ??= {};
+  const previous = byNpc[targetKey];
+  if (event === "mutual_romance") {
+    const eligible = state.contentTone === "mature"
+      && character.age !== "young"
+      && npc.entityType === "person"
+      && npc.adult === true
+      && (previous?.trust ?? 0) >= 20
+      && (previous?.affection ?? 0) >= 25;
+    if (!eligible) return false;
+  }
+
+  const [trustDelta, affectionDelta] = RELATIONSHIP_EFFECTS[event];
+  const trust = clampRelationship((previous?.trust ?? 0) + trustDelta);
+  const affection = clampRelationship((previous?.affection ?? 0) + affectionDelta);
+  const endsRomance = event === "romance_ended" || event === "threatened"
+    || event === "harmed" || event === "betrayed" || trust <= -20 || affection <= 0;
+  const status = event === "mutual_romance"
+    ? "romantic"
+    : previous?.status === "romantic" && !endsRomance
+      ? "romantic"
+      : relationshipStatus(trust, affection);
+  byNpc[targetKey] = {
+    npcName: npc.name,
+    trust,
+    affection,
+    status,
+    note: update.reason.trim().slice(0, 160),
+    updatedAt,
+  };
+  return true;
+}
+
+function hydrateRelationships(state: PublicState): void {
+  const partyById = new Map(state.party.map(character => [character.id, character]));
+  const normalized: Record<string, Record<string, NpcRelationship>> = {};
+  for (const [characterId, rawByNpc] of Object.entries(state.npcRelationships ?? {})) {
+    const character = partyById.get(characterId);
+    if (!character || !rawByNpc || typeof rawByNpc !== "object") continue;
+    const byNpc: Record<string, NpcRelationship> = {};
+    for (const rawRelationship of Object.values(rawByNpc)) {
+      if (!rawRelationship || typeof rawRelationship !== "object") continue;
+      const relationship = rawRelationship as Partial<NpcRelationship>;
+      const npcName = typeof relationship.npcName === "string" ? relationship.npcName.trim().slice(0, 60) : "";
+      if (!npcName) continue;
+      const trust = clampRelationship(Number.isFinite(relationship.trust) ? relationship.trust! : 0);
+      const affection = clampRelationship(Number.isFinite(relationship.affection) ? relationship.affection! : 0);
+      const knownNpc = state.npcVoices[npcKey(npcName)];
+      const canPreserveRomance = character.age !== "young"
+        && knownNpc?.entityType === "person"
+        && knownNpc.adult === true;
+      const status = relationship.status === "romantic" && canPreserveRomance
+        ? "romantic"
+        : relationshipStatus(trust, affection);
+      byNpc[npcKey(npcName)] = {
+        npcName,
+        trust,
+        affection,
+        status,
+        note: typeof relationship.note === "string" ? relationship.note.trim().slice(0, 160) : "",
+        updatedAt: typeof relationship.updatedAt === "string"
+          ? relationship.updatedAt
+          : new Date(0).toISOString(),
+      };
+    }
+    if (Object.keys(byNpc).length > 0) normalized[characterId] = byNpc;
+  }
+  state.npcRelationships = normalized;
+
+  const pending = RelationshipUpdateSchema.safeParse(state.pendingRelationship);
+  state.pendingRelationship = state.pendingCheck && pending.success ? pending.data : null;
+}
+
 function hydrateState(state: PublicState): PublicState {
   state.quests ??= [];
   state.npcVoices ??= {};
   state.pendingNpc ??= null;
   state.artStyle ??= "painting";
+  state.contentTone ??= "standard";
+  state.pendingRelationship ??= null;
+  state.npcRelationships ??= {};
   state.scene.occupants ??= [];
   state.scene.description = sanitizePlayerFacingText(state.scene.description);
   state.log = state.log
@@ -126,6 +239,7 @@ function hydrateState(state: PublicState): PublicState {
       delete state.npcVoices[key];
     }
   }
+  hydrateRelationships(state);
   return state;
 }
 
@@ -149,11 +263,14 @@ function defaultState(): PublicState {
     suggestedActions: [],
     pendingCheck: null,
     pendingNpc: null,
+    pendingRelationship: null,
     dmBusy: false,
     narratorVoice: "male",
     artStyle: "painting",
+    contentTone: "standard",
     quests: [],
     npcVoices: {},
+    npcRelationships: {},
     saves: [],
   };
 }
@@ -195,7 +312,7 @@ export class GameRoom {
   addClient(ws: WebSocket): void {
     this.idleShutdown.clientConnected();
     this.clients.set(ws, "");
-    this.send(ws, { type: "state", state: this.state });
+    this.send(ws, { type: "state", state: this.publicStateSnapshot() });
     this.sendPresence(ws);
     // safety net: if the current scene has no art (e.g. ComfyUI was still booting when we
     // asked, or an earlier attempt failed), retry now that someone is looking at it
@@ -238,6 +355,17 @@ export class GameRoom {
         this.persist();
         this.broadcastState();
         return;
+      case "set_content_tone": {
+        const player = this.clients.get(ws);
+        if (!player || !this.state.party.some(character => npcKey(character.name) === npcKey(player)))
+          return this.send(ws, { type: "error", message: "Join the table before changing shared content settings." });
+        if (this.state.dmBusy)
+          return this.send(ws, { type: "error", message: "Wait for the storyteller to finish." });
+        this.state.contentTone = msg.tone;
+        this.persist();
+        this.broadcastState();
+        return;
+      }
       case "save_slot":
         saveSlot(msg.name.trim(), this.state, this.history);
         this.state.saves = listSaves();
@@ -421,15 +549,22 @@ appropriate check.`
       if (move.mood && move.move !== "change_scene") this.state.scene.mood = move.mood;
       if (move.quest) this.applyQuestUpdate(move.quest);
       this.state.pendingNpc = null;
+      this.state.pendingRelationship = null;
+      const moveNpc = move.npc ? this.npcVoice(move.npc) : null;
+      const relationship = move.relationship
+        && npcKey(move.relationship.playerName) === npcKey(player)
+        ? move.relationship
+        : null;
       let instruction = "ENGINE: Narrate the next story beat in 1-3 short, plain sentences; prefer 1-2. Use direct words, few modifiers, and no metaphor. Move the story forward without repeating known details. Never mention private scene fields, visual prompts, or occupant lists.";
       let presentation: { speaker: NarrationSpeaker; voice?: string; voiceSpeed?: number; logKind: "dm" | "npc" } | undefined;
 
       if (move.move === "request_check" && move.check) {
         const request = checkRequestFromIntent(move.check);
         this.state.pendingCheck = request;
-        if (mode === "speak" && move.npc) {
-          const profile = this.npcVoice(move.npc);
-          this.state.pendingNpc = profile;
+        if (relationship && npcKey(relationship.playerName) === npcKey(request.playerName))
+          this.state.pendingRelationship = relationship;
+        if (mode === "speak" && moveNpc) {
+          this.state.pendingNpc = moveNpc;
         } else {
           this.state.pendingNpc = null;
         }
@@ -446,15 +581,17 @@ appropriate check.`
         instruction = `ENGINE: ${move.item.playerName} obtains: ${move.item.item}. Weave it into the narration naturally (1-2 sentences).`;
       }
 
-      if (mode === "speak" && move.move !== "request_check" && move.npc) {
-        const profile = this.npcVoice(move.npc);
-        instruction = `ENGINE: Reply only as ${JSON.stringify(profile.name)} in direct spoken dialogue.
-Give a useful 1-3 sentence response consistent with this personality: ${profile.personality}.
+      if (move.move !== "request_check" && relationship)
+        applyRelationshipEvent(this.state, relationship, relationship.immediate);
+
+      if (mode === "speak" && move.move !== "request_check" && moveNpc) {
+        instruction = `ENGINE: Reply only as ${JSON.stringify(moveNpc.name)} in direct spoken dialogue.
+Give a useful 1-3 sentence response consistent with this personality: ${moveNpc.personality}.
 Use short, natural spoken language. Do not add storyteller narration, headings, stage directions,
 or quotation marks. Do not speak or decide for the player.`;
         presentation = {
-          speaker: { kind: "npc", name: profile.name }, voice: profile.voice,
-          voiceSpeed: profile.voiceSpeed, logKind: "npc",
+          speaker: { kind: "npc", name: moveNpc.name }, voice: moveNpc.voice,
+          voiceSpeed: moveNpc.voiceSpeed, logKind: "npc",
         };
       }
 
@@ -494,6 +631,14 @@ or quotation marks. Do not speak or decide for the player.`;
     this.state.pendingCheck = null;
     const pendingNpc = this.state.pendingNpc;
     this.state.pendingNpc = null;
+    const pendingRelationship = this.state.pendingRelationship;
+    this.state.pendingRelationship = null;
+    if (pendingRelationship && npcKey(pendingRelationship.playerName) === npcKey(player))
+      applyRelationshipEvent(
+        this.state,
+        pendingRelationship,
+        result.success ? pendingRelationship.onSuccess : pendingRelationship.onFailure,
+      );
     this.broadcast({ type: "roll_result", result });
     const summary = `${result.playerName} rolled ${result.skill}: d20=${result.die}${result.modifier >= 0 ? "+" : ""}${result.modifier} = ${result.total} vs DC ${result.dc} -> ${result.success ? "SUCCESS" : "FAILURE"}${result.critical !== "none" ? ` (natural ${result.die}!)` : ""}`;
     this.pushLog("system", summary);
@@ -539,10 +684,12 @@ natural spoken sentences, no headings, narration, stage directions, quotation ma
     const party = this.state.party;
     const voice = this.state.narratorVoice;
     const artStyle = this.state.artStyle;
+    const contentTone = this.state.contentTone;
     this.state = defaultState();
     this.state.party = party;
     this.state.narratorVoice = voice;
     this.state.artStyle = artStyle;
+    this.state.contentTone = contentTone;
     this.state.saves = listSaves();
     this.history = [];
     this.setActivity(player, "starting_journey", premise || "A Surprise Adventure");
@@ -663,7 +810,7 @@ natural spoken sentences, no headings, narration, stage directions, quotation ma
     this.state.scene.occupants = this.state.scene.occupants.map(occupant => {
       const profile = this.npcVoice(occupant, false);
       return {
-        name: profile.name, sex: profile.sex, entityType: profile.entityType,
+        name: profile.name, sex: profile.sex, entityType: profile.entityType, adult: profile.adult,
         personality: profile.personality, appearance: profile.appearance,
       };
     });
@@ -674,6 +821,7 @@ natural spoken sentences, no headings, narration, stage directions, quotation ma
     const existing = this.state.npcVoices[key];
     if (existing) {
       existing.voiceSpeed ??= castNpcVoice(existing).speed;
+      if (existing.adult === undefined && npc.adult !== undefined) existing.adult = npc.adult;
       if (existing.appearance.startsWith("distinctive fantasy") && npc.appearance.trim()) {
         existing.appearance = npc.appearance.trim();
         existing.portraitUrl = null;
@@ -705,6 +853,7 @@ natural spoken sentences, no headings, narration, stage directions, quotation ma
     const index = this.state.scene.occupants.findIndex(candidate => npcKey(candidate.name) === key);
     const visible: NpcSpeaker = {
       name: npc.name.trim(), sex: npc.sex, entityType: npc.entityType,
+      adult: npc.adult,
       personality: npc.personality, appearance: npc.appearance,
     };
     if (index === -1) {
@@ -900,7 +1049,14 @@ natural spoken sentences, no headings, narration, stage directions, quotation ma
   }
 
   private broadcastState(): void {
-    this.broadcast({ type: "state", state: this.state });
+    this.broadcast({ type: "state", state: this.publicStateSnapshot() });
+  }
+
+  /** Roll-branch relationship intents persist for recovery but are private until resolved. */
+  private publicStateSnapshot(): PublicState {
+    return this.state.pendingRelationship
+      ? { ...this.state, pendingRelationship: null }
+      : this.state;
   }
 
   private broadcast(msg: ServerMessage): void {

@@ -78,6 +78,18 @@ parallel: the first accepted action still owns the shared Storyteller beat until
 - Named NPCs receive a campaign-persistent Kokoro voice distinct from the narrator. Sex and
   personality choose a stable voice and bounded delivery rate; social-check reactions retain both.
   American and British pronunciation pipelines share one model, so this does not add VRAM residency.
+- Settings has a shared Standard/Mature content mode. Standard is the default. The toggling player
+  is warned to obtain table agreement; no vote or host enforcement exists yet. Mature only permits
+  player-requested dark humor, brief fictional gore, and slowly earned adult consensual romance;
+  intimacy fades to black. Explicit sexual description,
+  minors, coercion, sexual violence, and eroticized captivity remain excluded. New Game resets the
+  content mode to Standard; a same-party New Campaign preserves it and saves restore it.
+- NPC relationships persist per hero as trust, affection, status, and a short established note.
+  The model selects a fixed event, never numbers; server reducers apply/clamp values. Check-dependent
+  changes wait for the real dice result; unresolved success/failure branches are persisted for crash
+  recovery but redacted from every client snapshot. Mutual romance requires Mature mode, an adult/elder hero,
+  an NPC explicitly marked adult, an existing bond, a person (not creature), and mutual interest.
+  Current relationship state appears under visible NPCs and in that hero's Sheet drawer.
 - Structured quest start/advance/complete/fail events, one opening main quest fallback, and a Quest
   Journal with active/completed/failed presentation.
 - Inventory sheet cards group duplicates and use code-native category icons without binary assets.
@@ -202,6 +214,15 @@ Current manual regression checklist:
 - In Settings, independently mute and adjust music/effects; confirm the quieter mix sits behind
   narration and the Now Playing label matches the scene, time, and weather; wait for or temporarily shorten the movement interval and confirm a
   same-scene variation; verify choices, rolls, combat, and boss arrangements.
+- In Settings, switch from Standard to Mature and confirm the shared-table warning. In a second
+  isolated browser profile, confirm the same setting arrives; New Game must reset it to Standard.
+- Speak with the same named adult NPC over several meaningful helpful/personal beats. Confirm only
+  the acting hero's Sheet gains relationship entries and the visible NPC card shows the status.
+- Ask to capture an alert resisting enemy. Confirm the Storyteller permits the attempt but pauses
+  for an appropriate real check; failure must change the situation instead of blocking the quest.
+- With Mature enabled, explicitly request dark humor or a gory fictional beat and confirm it stays
+  brief. Romance must grow gradually and mutually; intimacy must fade to black. Standard mode must
+  not introduce those mature beats.
 - Use Speak with two different NPCs, then revisit the first; verify direct replies, distinct voices,
   stable voice/rate reuse, `?` → close-up portrait, and style-specific portrait reuse. Repeat with one
   named creature. Storyteller narration must never receive an avatar.
@@ -269,4 +290,6 @@ selectors for remaining level-1 class/spell choices, the broader SRD data import
 pregeneration, an optional authored music library, a persistent region graph, and 3D dice.
 Full SRD advancement and encounter mechanics are specified in `docs/08-progression-and-content.md`;
 the current narrator must never grant levels, ASIs, class features, or item mechanics through prose.
+The current capture flow uses the deterministic ability-check engine; full SRD initiative, attacks,
+grapple/shove, conditions, escape, and restraint remain Phase 4 and must not be described as implemented.
 Do not confuse these planned features with defects in the current vertical slice.

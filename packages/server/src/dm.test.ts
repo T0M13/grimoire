@@ -1,5 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { PlayerFacingTextStream, sanitizePlayerFacingText, viewpointInstruction } from "./dm.js";
+import type { PublicState } from "@grimoire/shared";
+import {
+  buildMessages, MOVE_INSTRUCTION, PlayerFacingTextStream, sanitizePlayerFacingText,
+  semanticallyValid, viewpointInstruction,
+} from "./dm.js";
+
+function promptState(contentTone: PublicState["contentTone"]): PublicState {
+  return {
+    campaignName: "Test Tale",
+    scene: {
+      name: "Test Room", kind: "room", timeOfDay: "day", weather: "clear", mood: "mystery",
+      description: "A plain room.", exits: [], occupants: [], imagePrompt: "plain empty room", imageUrl: null,
+    },
+    party: [], log: [], suggestedActions: [], pendingCheck: null, pendingNpc: null,
+    pendingRelationship: null, dmBusy: false, narratorVoice: "male", artStyle: "painting",
+    contentTone, quests: [], npcVoices: {}, npcRelationships: {}, saves: [],
+  };
+}
 
 describe("narration viewpoint", () => {
   it("forces the active player character into second person", () => {
@@ -7,6 +24,79 @@ describe("narration viewpoint", () => {
     expect(instruction).toContain('Refer to their character ONLY as "you" or "your"');
     expect(instruction).toContain("Do not output their character name");
     expect(instruction).toContain('"Cedric"');
+  });
+});
+
+describe("table content policy", () => {
+  it("selects the default and mature policies while retaining absolute boundaries", () => {
+    const standard = buildMessages(promptState("standard"), [], "Continue.")[0]!.content;
+    const mature = buildMessages(promptState("mature"), [], "Continue.")[0]!.content;
+
+    expect(standard).toContain("TABLE CONTENT MODE: STANDARD");
+    expect(standard).not.toContain("TABLE CONTENT MODE: MATURE");
+    expect(mature).toContain("TABLE CONTENT MODE: MATURE");
+    expect(mature).toContain("permission, not a command");
+    expect(mature).toContain("Intimacy always fades to black");
+    expect(mature).toContain("Never produce explicit pornography");
+    expect(mature).toContain("social roll can change trust or affection, but it can never manufacture consent");
+  });
+
+  it("requires meaningful checks and consequences for resisting capture", () => {
+    expect(MOVE_INSTRUCTION).toContain("Capturing an alert, resisting enemy");
+    expect(MOVE_INSTRUCTION).toContain("Athletics for physical restraint");
+    expect(MOVE_INSTRUCTION).toContain("Failure must create escape, alarm, injury, hostility");
+  });
+
+  it("never lets a social roll decide mutual romance or a breakup", () => {
+    const state = promptState("mature");
+    state.party = [{ name: "Alice" } as PublicState["party"][number]];
+    state.npcVoices.mara = {
+      name: "Mara", sex: "female", entityType: "person", adult: true,
+      personality: "careful", appearance: "adult ferryman", voice: "af_bella",
+    };
+    for (const consentEvent of ["mutual_romance", "romance_ended"] as const) {
+      expect(semanticallyValid({
+        move: "request_check",
+        check: { playerName: "Alice", skill: "Persuasion", difficulty: "hard", reason: "Ask for a date" },
+        relationship: {
+          playerName: "Alice", npcName: "Mara", reason: "Alice asked Mara for a date.",
+          immediate: "none", onSuccess: consentEvent, onFailure: "none",
+        },
+        suggestedActions: [],
+      }, state, "Alice asks Mara for a date.")).toBe(false);
+    }
+  });
+
+  it("validates scene occupants with the same adult metadata rules as speaking NPCs", () => {
+    const state = promptState("mature");
+    state.npcVoices.nell = {
+      name: "Nell", sex: "female", entityType: "person", adult: false,
+      personality: "quiet", appearance: "a child in a red cloak", voice: "af_bella",
+    };
+    expect(semanticallyValid({
+      move: "change_scene",
+      scene: {
+        name: "The Lane", kind: "street", timeOfDay: "day", weather: "clear", mood: "town",
+        exits: [], imagePrompt: "empty village lane",
+        occupants: [{
+          name: "Nell", sex: "female", entityType: "person", adult: true,
+          personality: "quiet", appearance: "a little girl in a red cloak",
+        }],
+      },
+      suggestedActions: [],
+    }, state, "You enter the lane.")).toBe(false);
+  });
+
+  it("rejects contradictory adult metadata before it can enter relationship state", () => {
+    const state = promptState("mature");
+    expect(semanticallyValid({
+      move: "narrate",
+      npc: {
+        name: "Nell", sex: "female", entityType: "person", adult: true,
+        personality: "quiet", appearance: "a little girl in a red cloak",
+      },
+      suggestedActions: [],
+    }, state, "You greet Nell.")).toBe(false);
   });
 });
 
