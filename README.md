@@ -1,35 +1,100 @@
 # Grimoire
 
-**Your own AI Dungeon Master. On your PC. Free forever.**
+Grimoire is a work-in-progress fantasy role-playing game that runs in a web browser. One person
+hosts the game on a Windows or Linux computer, and friends join the same journey by opening a link.
 
-Grimoire is a Dungeons & Dragons-style adventure game you host yourself. An AI storyteller
-narrates with a real voice, paints the scenes as you explore, asks for dice rolls, and never
-tells the same story twice. Play alone, or let friends join the same shared table from their browsers.
+Create a hero, explore new places, speak with characters, choose what to do, and make dice checks.
+The game writes and speaks the story as you play, with changing scene art, portraits, music, and
+sound effects.
 
-No accounts. No cloud. No subscription. Everything runs on the host's machine.
+> **Work in progress:** Grimoire is playable, but it is still being actively developed. Some systems
+> are incomplete, features may change, and you may find rough edges. Anyone is welcome to try the
+> current build and [report a problem](https://github.com/T0M13/grimoire/issues).
 
-![The Fireside](docs/media/fireside.png)
+## See the current build
 
-## How it plays
+These screenshots come from a real five-minute play session in the current development build. The
+places, characters, and story can be different in every journey.
 
-You type what you do — *"I sneak up to the warehouse window"* — and within a second the
-storyteller answers, out loud. Real attempts call for real dice: a d20 roll against a fair DC,
-resolved by an actual rules engine (the AI never fudges math). Success and failure both push
-the story somewhere new. People-free environment art fades in behind the story while named NPCs and
-creatures receive consistent close-up dialogue portraits. Music follows the location, mood, time,
-and weather; everything is saved continuously, so next weekend picks up mid-sentence.
+### Create your hero
 
-| | |
-|---|---|
-| ![Scene art](docs/media/scene-kitchen.png) | ![Scene art](docs/media/scene-portal.png) |
+Build a complete level-1 character with guided tabs, or use **Randomize Everything** when you want
+to begin quickly. The Review tab shows the final abilities, skills, languages, features, spells,
+and equipment before the adventure starts.
 
-Every hero gets a painted portrait, generated from your own description:
+![The character creation Review tab](docs/media/readme-character-creation.webp)
 
-<img src="docs/media/hero-portrait.png" alt="A generated hero portrait" width="280" />
+### Explore and choose what happens
 
-## Start playing (host)
+Write any action you can think of, or select one of the suggested choices. Use **Act** for actions,
+**Speak** to address a character directly, and **Ask DM** when you want information about the world
+or the rules.
 
-**Windows** — install nothing first, just:
+![Storytelling, scene art, and suggested choices](docs/media/readme-adventure-ui.webp)
+
+### Speak with characters
+
+Named people and creatures can have their own portrait and voice. Their relationship with each
+hero can change as the story continues.
+
+![A conversation with a named character](docs/media/readme-npc-dialogue.webp)
+
+### Keep playing while checking your character
+
+The character sheet, map, quests, and settings open beside the story. You can still type and
+continue the journey while a panel is open.
+
+![The character sheet beside the active story](docs/media/readme-character-sheet.webp)
+
+## What can you do today?
+
+- Create a level-1 hero using races, classes, abilities, backgrounds, skills, languages, and
+  equipment from the included 2014 SRD rules.
+- Randomize a complete legal character.
+- Type your own actions or use suggested choices.
+- Explore generated locations with spoken narration, scene art, portraits, music, and sound effects.
+- Speak directly to named characters and build friendships, rivalries, or relationships over time.
+- Make character-based skill checks when an action has a meaningful risk.
+- Follow quests and inspect the party, map, character sheets, inventory, and settings.
+- Save journeys on the host computer and load them again later.
+- Play alone or share one journey with friends.
+
+The current rules implementation is not a complete tabletop ruleset. More combat, progression,
+spells, items, quests, and open-world systems are still being built.
+
+## Start on Windows
+
+The first start installs the required tools and downloads the game models. This may take a while,
+uses several gigabytes of data, and needs at least 15 GB of free disk space; 20 GB leaves room for
+new models and generated images.
+
+Automatic installation is tested on Windows 11 with `winget`, which is normally included. If
+`winget` is missing, install **App Installer** from Microsoft first and then run the start script
+again.
+
+### Download without Git
+
+1. [Download the current Grimoire ZIP](https://github.com/T0M13/grimoire/archive/refs/heads/main.zip).
+2. Extract the ZIP into a normal folder.
+3. Open that folder, click the File Explorer address bar, type `powershell`, and press Enter.
+4. Run:
+
+```powershell
+.\start.ps1
+```
+
+Follow any Windows installation or firewall prompts. When startup finishes, open
+[http://localhost:5173](http://localhost:5173) in your browser.
+
+If Windows blocks the script, run this instead:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1
+```
+
+### Clone with Git
+
+If you already use Git:
 
 ```powershell
 git clone https://github.com/T0M13/grimoire.git
@@ -37,72 +102,101 @@ cd grimoire
 .\start.ps1
 ```
 
-**Linux:**
+If `npm` is already available in your terminal, you can also use:
+
+```powershell
+npm start
+npm stop
+```
+
+## Start on Linux
+
+Grimoire supports current Debian/Ubuntu, Fedora, and Arch-family distributions. Install Git with
+your distribution's software manager first, then run:
 
 ```bash
 git clone https://github.com/T0M13/grimoire.git
-cd grimoire && chmod +x setup.sh start.sh stop.sh
+cd grimoire
+chmod +x setup.sh start.sh stop.sh
 ./start.sh
 ```
 
-The first start installs everything itself (Node, Python, Ollama, the AI models — about 10 GB,
-one time) and **checks what your PC can handle**: a decent NVIDIA GPU gets the full experience,
-a weak GPU or none at all gets a smaller, faster model that still plays great. Then it opens
-at **http://localhost:5173**. Create your hero and begin.
+Open [http://localhost:5173](http://localhost:5173) when startup finishes. See the
+[hosting guide](docs/10-hosting.md) for persistent server mode and systemd setup.
 
-Stopping is automatic — close the last browser tab and the whole stack shuts itself down.
+## Play with friends
 
-## Friends join in 10 seconds
+Friends do not need to install the game. The host starts Grimoire, and everyone else opens the
+host's address in a browser.
 
-They don't install anything. You (the host) tell them your address:
+### On the same network
 
-- **Same WiFi:** they open `http://YOUR-PC-IP:5173` (find yours with `ipconfig` / `ip a`)
-- **Not in the house:** easiest is [Tailscale](https://tailscale.com) on both machines, then
-  the same URL with your Tailscale IP. (Don't port-forward Grimoire to the open internet —
-  it has no login. Details in [docs/10-hosting.md](docs/10-hosting.md).)
+1. Start Grimoire on the host computer.
+2. On Windows, run `ipconfig` and find the **IPv4 Address** under the active Wi-Fi or Ethernet
+   connection. On Linux, run `ip a` and find the active connection's IPv4 address.
+3. Friends open that address with port `5173`, for example `http://192.168.1.25:5173`.
+4. They choose **Join Current Journey**, create a hero, and join the party.
 
-They pick a hero, step into the tale, and share your campaign — everyone hears the same
-storyteller and sees the same scenes.
+The host may need to allow Node.js through the firewall on private networks.
 
-The current multiplayer build is one sequential shared room: players take turns in one location,
-and dialogue is public to the table. On one PC, use two browser profiles or a normal + private
-window because ordinary tabs share the same saved hero identity. Exact testing steps and current
-limits are in [docs/10-hosting.md](docs/10-hosting.md).
+### Across the internet
 
-## Let a bot try it
+Use a private network such as [Tailscale](https://tailscale.com), or put Grimoire behind an
+authenticated HTTPS proxy. Do not expose ports `5173` and `8787` directly to the internet. The
+[hosting guide](docs/10-hosting.md) explains the options.
 
-Grimoire has an open API (one WebSocket — the same one the browser uses). A built-in bot can
-join and play by itself, which is also the quickest health check of a host:
+Grimoire does not yet have host permissions or its own sign-in screen. Anyone who can reach the
+address can interact with the shared campaign, so protect any public address.
 
-```bash
-npm run demo        # a bot plays for 2 minutes and prints the story + dice
+## How multiplayer works today
+
+The current version has one shared journey on each host:
+
+- Everyone sees the same location, story, quests, dialogue, images, and dice results.
+- There is no fixed turn order during exploration. Anyone may act when the game is ready.
+- The game resolves one player action at a time.
+- Only the named hero can complete a pending dice check.
+- Dialogue and narration are visible to the whole party.
+
+Private conversations, separate locations, parallel activities, and personal side quests are
+planned, but they are not part of the current build yet.
+
+## Stop or keep the host running
+
+A normal start shuts down the game services about 15 seconds after the final browser tab closes.
+To stop immediately on Windows:
+
+```powershell
+.\stop.ps1
 ```
 
-See [docs/09-api.md](docs/09-api.md) to build your own client or let another AI play.
+To keep a Windows host running after everyone closes their tabs:
 
-## What's inside
+```powershell
+.\start.ps1 -Persistent
+```
 
-- AI Dungeon Master (local LLM via Ollama) with a two-pass design: it *chooses a move*
-  (structured, schema-constrained), then narrates — a deterministic 5e SRD rules engine does
-  all dice and math
-- Spoken narration (local Kokoro voice, male/female narrator) plus persistent per-NPC voices
-  with personality-matched delivery
-- Living-subject-free scene backgrounds plus hero, NPC, and creature portraits generated locally
-  (ComfyUI + Stable Diffusion)
-- Full SRD level-1 character creator: 9 races, 12 classes, point-buy/array/rolled
-- Non-blocking quest/map/sheet/settings docks, a restrained 36-movement adaptive procedural
-  soundtrack, and save slots
-- Per-hero persistent NPC trust, affection, friendship/rivalry, and conservatively gated adult
-  romance; shared Standard/Mature story tone with requested dark humor/gore and fade-to-black intimacy
-- Act / Speak / Ask-DM intent modes; everything persists in SQLite on the host
+On Linux, use:
 
-## Digging deeper
+```bash
+./stop.sh
+./start.sh --persistent
+```
 
-| | |
+## Hardware notes
+
+A modern NVIDIA GPU gives the best narration and image-generation speed. Grimoire selects a
+smaller model for weaker GPUs or CPU-only systems, but generation will be slower and some media
+features may take longer or temporarily fall back to text.
+
+## More information
+
+| Guide | What it covers |
 |---|---|
-| [docs/10-hosting.md](docs/10-hosting.md) | Hosting, hardware tiers, Linux servers, security |
-| [docs/09-api.md](docs/09-api.md) | The play-by-WebSocket API + autoplay bot |
-| [docs/05-handoff.md](docs/05-handoff.md) | Exact implemented state — start here to contribute (human or AI) |
-| [docs/01-game-design.md](docs/01-game-design.md) … [08](docs/08-progression-and-content.md) | Design, research, architecture, roadmap, SRD coverage, progression |
+| [Hosting and multiplayer](docs/10-hosting.md) | Networks, servers, hardware, and security |
+| [Current implementation](docs/05-handoff.md) | What is finished and what still needs testing |
+| [Game design](docs/01-game-design.md) | The intended player experience |
+| [WebSocket API](docs/09-api.md) | The autoplay tool and custom clients |
+| [Ideas and planned work](docs/11-ideas-backlog.md) | Features being considered |
 
-Rules content: 2014 SRD under CC-BY-4.0 — attribution in [NOTICE.md](NOTICE.md).
+The included 2014 SRD rules content is used under CC BY 4.0. See [NOTICE.md](NOTICE.md).
