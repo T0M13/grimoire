@@ -91,6 +91,39 @@ This is currently a sequential shared table, not split-party multiplayer: one sc
 DM lock, public dialogue/audio, no lobby/invite code, and no authenticated host controls. Use only
 a trusted LAN or VPN.
 
+## Publishing on your own domain (Nginx Proxy Manager + Cloudflare)
+
+Goal: friends open `https://grimoire.your-domain.com` and join — no IPs, no installs.
+Reference setup: a home server running Nginx Proxy Manager (NPM) + Pi-hole, DNS on Cloudflare,
+game PC on the same LAN.
+
+1. **Give the game PC a fixed LAN IP** (router DHCP reservation), e.g. `192.168.0.50`.
+   Allow inbound TCP 5173 and 8787 from the LAN in Windows Firewall (Node usually prompts
+   for this on first run).
+2. **DNS**: in Cloudflare, add `grimoire` as an A record to your public IP (proxied is fine —
+   WebSockets pass through), or attach it to an existing cloudflared tunnel that reaches NPM.
+   Without a tunnel, forward router port 443 to the NPM server.
+3. **NPM proxy host** for `grimoire.your-domain.com` → `http://<game-pc-ip>:5173`, with
+   **WebSockets Support ON** and a Let's Encrypt cert (DNS challenge via Cloudflare works even
+   behind the proxy). Then add **Custom Locations**, each also pointing at `<game-pc-ip>` but
+   port **8787**, WebSockets ON:
+   `/ws`, `/assets`, `/health`, `/portrait`
+   (everything else stays on 5173 — one domain, no CORS.)
+4. **Start the game with its public identity:**
+   ```powershell
+   $env:GRIMOIRE_PUBLIC_ORIGIN = "https://grimoire.your-domain.com"
+   .\start.ps1
+   ```
+   This makes Vite accept the domain and the client use `wss://` on the same origin.
+5. **Pi-hole bonus**: add a local DNS record `grimoire.your-domain.com -> <NPM server IP>` so
+   LAN players skip the internet round-trip entirely.
+
+When the game is not running, visitors get NPM's offline page - nothing else to clean up.
+
+**Access control, strongly recommended:** Grimoire has no login, and any visitor could act in
+your campaign or reset it. Put the subdomain behind Cloudflare Access (free: allow-list your
+friends' emails, one-time PIN) or an NPM Access List (basic auth) so only your table can enter.
+
 ## Maintenance
 
 - `npm test` — rules/media/lifecycle suite. `npm run typecheck` — strict TS across the repo.
