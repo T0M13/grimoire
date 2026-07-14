@@ -60,6 +60,23 @@ multiplayer lobby/seat/spotlight feature set remains Phase 3 work.
 - Parallel NPC dialogue, scoped quests/events, and persistent dialogue-shot architecture is
   specified in `docs/06-open-world-multiplayer.md`; implementation remains Phase 3 work.
 
+## DM model policy (2026-07-14, benchmarked)
+
+`spikes/model-shootout.mjs` compares candidate DM models on TTFT, tok/s, constrained-JSON
+validity, and check-selection. Results on the reference RTX 4070: llama3.1:8b (80 tok/s,
+0.89 s tool calls, valid JSON) beat qwen3:8b (77 tok/s but 1.85 s tool calls and never chose
+request_check); llama3.2:3b (110 tok/s, valid JSON, strong check bias) is the low-tier pick.
+Setup detects VRAM and writes `var/host-config.json`: >= 7 GB VRAM -> `llama3.1:8b`, otherwise
+`llama3.2:3b` (CPU-friendly). `config.ts` resolves `GRIMOIRE_DM_MODEL` env > host-config >
+default. Re-run the shootout before changing tiers; do not swap models on vibes.
+
+## Public API and autoplay
+
+The WebSocket protocol is the public API (`docs/09-api.md`). `tools/api/autoplay.mjs`
+(`npm run demo`) joins as a bot and plays autonomously for N minutes — use it as a host
+health check and as the harness for AI-driven playtesting. A 1-minute reference run produced
+15 beats, 6 rolls, and 4 scene changes with no stalls.
+
 ## Fresh-clone setup
 
 Windows hosts run `./start.ps1`. It invokes the idempotent `setup.ps1` before launching anything.

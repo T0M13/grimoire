@@ -213,6 +213,26 @@ Ensure-Download "LCM-LoRA for SD 1.5" `
   (Join-Path $comfyDir "models\loras\lcm-lora-sdv15.safetensors") `
   100000000 "8F90D840E075FF588A58E22C6586E2AE9A6F7922996EE6649A7F01072333AFE4"
 
+# Pick the DM model for this machine's hardware (benchmarked tiers; override: GRIMOIRE_DM_MODEL).
+# >= 7 GB VRAM -> llama3.1:8b (full experience). Weaker GPU or no NVIDIA -> llama3.2:3b,
+# which runs well even on CPU-only machines - the game stays playable on a toaster.
+$dmModel = $env:GRIMOIRE_DM_MODEL
+$vramMB = 0
+try {
+  if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
+    $vramMB = [int]((& nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | Select-Object -First 1).Trim())
+  }
+} catch { }
+if (-not $dmModel) {
+  $dmModel = if ($vramMB -ge 7000) { "llama3.1:8b" } else { "llama3.2:3b" }
+}
+Write-Host "[OK]   Hardware tier: $(if ($vramMB -gt 0) { "$vramMB MB VRAM" } else { 'no NVIDIA GPU detected' }) -> DM model $dmModel" -ForegroundColor Green
+if (-not $Check) {
+  $hostConfig = @{ dmModel = $dmModel; detectedVramMB = $vramMB } | ConvertTo-Json -Compress
+  New-Item -ItemType Directory -Force -Path (Join-Path $root "var") | Out-Null
+  [System.IO.File]::WriteAllText((Join-Path $root "var\host-config.json"), $hostConfig, (New-Object System.Text.UTF8Encoding($false)))
+}
+
 # Start Ollama long enough to make sure the resident DM model is available.
 if ($ollama) {
   $setupOllamaProcess = $null
@@ -231,14 +251,14 @@ if ($ollama) {
     }
     if (Test-Http "http://127.0.0.1:11434/api/tags") {
       $models = (& $ollama list | Out-String)
-      if ($models -match "(?m)^llama3\.1:8b\s") {
-        Write-Host "[OK]   Ollama model llama3.1:8b" -ForegroundColor Green
+      if ($models -match "(?m)^$([regex]::Escape($dmModel))\s") {
+        Write-Host "[OK]   Ollama model $dmModel" -ForegroundColor Green
       } elseif ($Check) {
-        Write-Host "[MISS] Ollama model llama3.1:8b" -ForegroundColor Yellow
+        Write-Host "[MISS] Ollama model $dmModel" -ForegroundColor Yellow
       } else {
-        Write-Host "[GET]  Pulling Ollama model llama3.1:8b (large one-time download)..." -ForegroundColor Yellow
-        & $ollama pull llama3.1:8b
-        if ($LASTEXITCODE -ne 0) { throw "Could not pull llama3.1:8b." }
+        Write-Host "[GET]  Pulling Ollama model $dmModel (large one-time download)..." -ForegroundColor Yellow
+        & $ollama pull $dmModel
+        if ($LASTEXITCODE -ne 0) { throw "Could not pull $dmModel." }
       }
     }
   } finally {

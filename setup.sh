@@ -153,6 +153,25 @@ ensure_download "LCM-LoRA for SD 1.5" \
   "$COMFY_DIR/models/loras/lcm-lora-sdv15.safetensors" 100000000 \
   "8f90d840e075ff588a58e22c6586e2ae9a6f7922996ee6649a7f01072333afe4"
 
+# Pick the DM model for this machine's hardware (benchmarked tiers; override: GRIMOIRE_DM_MODEL).
+# >= 7 GB VRAM -> llama3.1:8b (full experience). Weaker GPU or no NVIDIA -> llama3.2:3b,
+# which runs well even on CPU-only machines - the game stays playable on a toaster.
+VRAM_MB=0
+if command -v nvidia-smi >/dev/null 2>&1; then
+  VRAM_MB=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d '[:space:]')
+  [[ "$VRAM_MB" =~ ^[0-9]+$ ]] || VRAM_MB=0
+fi
+DM_MODEL="${GRIMOIRE_DM_MODEL:-}"
+if [[ -z "$DM_MODEL" ]]; then
+  if ((VRAM_MB >= 7000)); then DM_MODEL="llama3.1:8b"; else DM_MODEL="llama3.2:3b"; fi
+fi
+if ((VRAM_MB > 0)); then say "[OK]" "Hardware tier: ${VRAM_MB} MB VRAM -> DM model $DM_MODEL"
+else say "[OK]" "Hardware tier: no NVIDIA GPU detected -> DM model $DM_MODEL"; fi
+if ((!CHECK)); then
+  mkdir -p "$ROOT/var"
+  printf '{"dmModel":"%s","detectedVramMB":%s}' "$DM_MODEL" "$VRAM_MB" > "$ROOT/var/host-config.json"
+fi
+
 if command -v ollama >/dev/null 2>&1; then
   if ! http_ok "http://127.0.0.1:11434/api/tags" && ((!CHECK)); then
     say "[BOOT]" "Starting Ollama for model setup"
@@ -160,9 +179,9 @@ if command -v ollama >/dev/null 2>&1; then
     for _ in {1..30}; do http_ok "http://127.0.0.1:11434/api/tags" && break; sleep 1; done
   fi
   if http_ok "http://127.0.0.1:11434/api/tags"; then
-    if ollama list | awk '{print $1}' | grep -qx 'llama3.1:8b'; then say "[OK]" "Ollama model llama3.1:8b"
-    elif ((CHECK)); then say "[MISS]" "Ollama model llama3.1:8b"
-    else say "[GET]" "Pulling Ollama model llama3.1:8b"; ollama pull llama3.1:8b; fi
+    if ollama list | awk '{print $1}' | grep -qx "$DM_MODEL"; then say "[OK]" "Ollama model $DM_MODEL"
+    elif ((CHECK)); then say "[MISS]" "Ollama model $DM_MODEL"
+    else say "[GET]" "Pulling Ollama model $DM_MODEL"; ollama pull "$DM_MODEL"; fi
   elif ((CHECK)); then say "[INFO]" "Ollama is installed but not running"; else echo "Ollama did not start" >&2; exit 1; fi
 fi
 if ((CHECK)); then printf '\nCheck complete; nothing was changed.\n'; else printf '\nSetup complete.\n'; fi
