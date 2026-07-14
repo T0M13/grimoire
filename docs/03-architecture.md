@@ -151,8 +151,10 @@ every resolved action → crash-safe, refresh-safe).
   vignette emphasis, not a mode change.
 - **Combat state:** art dims into background; zone cards slide in with tokens; initiative rail
   top; your action bar replaces free input on your turn (free-text "improvise" always there).
-Character sheet, inventory, quest log = slide-over drawers, never navigation away.
-Mobile/tablet: same layout stacks; dice and buttons are touch-first. Keep bundle lean; no
+Character sheet, inventory, map, quest log, and settings use one non-modal dock rather than
+navigation or a blocking backdrop. On desktop the composer reflows beside it; on mobile the dock
+scrolls above the still-usable composer.
+Mobile/tablet: the same layout stacks; dice and buttons are touch-first. Keep bundle lean; no
 heavy 3D — the 3D dice canvas is the only WebGL surface.
 
 ## 8. Networking & hosting

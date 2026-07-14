@@ -9,7 +9,7 @@ import {
   checkRequestFromIntent, raceRulesById, resolveCheck, seededRng, validateBuildChoices,
   validateCharacterChoices, type CharacterBuildChoices, type Rng,
 } from "@grimoire/rules";
-import { decideMove, narrate } from "./dm.js";
+import { decideMove, narrate, sanitizePlayerFacingText } from "./dm.js";
 import { generatePortrait, getNpcPortrait, getSceneImage, sceneSignature, SentenceStream, synthesize } from "./media.js";
 import { deleteSlot, listSaves, loadCampaign, loadSlot, logEvent, saveCampaign, saveSlot } from "./db.js";
 import type { ChatMessage } from "./ollama.js";
@@ -19,11 +19,40 @@ import { CONFIG } from "./config.js";
 const OPENING_INSTRUCTION = (premise: string, party: string) =>
   `ENGINE: Begin a brand-new adventure for this party: ${party}.
 Premise wish from the players: "${premise || "surprise us"}".
-Your move MUST be "change_scene" - invent an evocative opening location where the adventure hooks the party immediately.
+Your move MUST be "change_scene" - invent a clear opening location where the adventure hooks the party immediately.
 Also start one concise main quest for that hook using the structured "quest" field.
 List every named non-player person or creature currently visible in scene.occupants; never include
 party members there. The scene image must show the location itself and physical evidence of that
 hook - never living subjects.`;
+
+type NpcVoiceTone = "forceful" | "warm" | "lively" | "formal" | "neutral";
+
+/** Deterministic local casting: no extra LLM/model call, and the saved profile remains authoritative. */
+export function castNpcVoice(npc: NpcSpeaker): { voice: string; speed: number; tone: NpcVoiceTone } {
+  const cues = `${npc.personality} ${npc.appearance}`.toLowerCase();
+  let tone: NpcVoiceTone;
+  if (/fierce|gruff|rough|stern|angry|bold|harsh|commanding|massive|brutal/.test(cues)) tone = "forceful";
+  else if (/warm|kind|gentle|soft|patient|calm|friendly|caring/.test(cues)) tone = "warm";
+  else if (/playful|sly|quick|young|mischievous|cheerful|bright|excited|nervous/.test(cues)) tone = "lively";
+  else if (/formal|cold|reserved|solemn|precise|noble|scholarly|measured/.test(cues)) tone = "formal";
+  else tone = "neutral";
+
+  const cast = CONFIG.npcVoices[npc.sex];
+  let voice = cast[tone];
+  if (tone === "neutral") {
+    const pool = Object.values(cast);
+    const slot = crypto.createHash("sha256").update(npcKey(npc.name)).digest()[0]! % pool.length;
+    voice = pool[slot]!;
+  }
+
+  let speed = tone === "lively" ? 1.07 : tone === "forceful" ? 0.94 : tone === "formal" ? 0.96 : 0.99;
+  if (/ancient|very old|slow|weary|tired|deliberate|sleepy/.test(cues)) speed = 0.88;
+  else if (/hurried|rapid|energetic|excited|nervous/.test(cues)) speed = 1.09;
+  if (npc.entityType === "creature" && !/small|quick|young|tiny/.test(cues)) speed -= 0.03;
+  const identityJitter = (crypto.createHash("sha256").update(`pace:${npcKey(npc.name)}`).digest()[0]! % 5 - 2) / 100;
+  speed = Math.min(1.12, Math.max(0.82, speed + identityJitter));
+  return { voice, speed: Number(speed.toFixed(2)), tone };
+}
 
 function hydrateState(state: PublicState): PublicState {
   state.quests ??= [];
@@ -31,6 +60,16 @@ function hydrateState(state: PublicState): PublicState {
   state.pendingNpc ??= null;
   state.artStyle ??= "painting";
   state.scene.occupants ??= [];
+  state.scene.description = sanitizePlayerFacingText(state.scene.description);
+  state.log = state.log
+    .map(entry => {
+      const legacyPlayer = !entry.kind && !["dm", "system", "storyteller", "storyteller / dm"]
+        .includes(entry.who.trim().toLowerCase());
+      return entry.kind === "player" || legacyPlayer
+        ? entry
+        : { ...entry, text: sanitizePlayerFacingText(entry.text) };
+    })
+    .filter(entry => entry.text.length > 0);
   const hydrateSubject = (subject: NpcSpeaker) => {
     subject.entityType ??= "person";
     subject.appearance ||= subject.entityType === "creature"
@@ -41,6 +80,9 @@ function hydrateState(state: PublicState): PublicState {
   if (state.pendingNpc) hydrateSubject(state.pendingNpc);
   for (const [key, profile] of Object.entries(state.npcVoices)) {
     hydrateSubject(profile);
+    const delivery = castNpcVoice(profile);
+    profile.voice ||= delivery.voice;
+    profile.voiceSpeed ??= delivery.speed;
     profile.portraitUrls ??= profile.portraitUrl
       ? { [state.artStyle]: profile.portraitUrl }
       : {};
@@ -102,7 +144,9 @@ export class GameRoom {
     this.idleShutdown = new IdleShutdown(options.idleShutdownMs ?? 15_000, options.onIdle ?? (() => {}));
     const saved = loadCampaign();
     this.state = hydrateState(saved?.state ?? defaultState());
-    this.history = saved?.history ?? [];
+    this.history = (saved?.history ?? []).map(message => message.role === "assistant"
+      ? { ...message, content: sanitizePlayerFacingText(message.content) }
+      : message);
     this.state.dmBusy = false; // never resume mid-generation
     this.state.narratorVoice ??= "male"; // older saves may predate this field
     this.state.saves = listSaves();
@@ -172,7 +216,9 @@ export class GameRoom {
     const loaded = loadSlot(id);
     if (!loaded) return this.send(ws, { type: "error", message: "That save no longer exists." });
     this.state = hydrateState(loaded.state);
-    this.history = loaded.history;
+    this.history = loaded.history.map(message => message.role === "assistant"
+      ? { ...message, content: sanitizePlayerFacingText(message.content) }
+      : message);
     this.state.dmBusy = false;
     this.state.narratorVoice ??= "male";
     this.state.saves = listSaves();
@@ -290,11 +336,11 @@ export class GameRoom {
     try {
       if (mode === "ask_dm") {
         await this.narrateAndSpeak(
-          `ENGINE: Answer the player's question directly as the Storyteller/DM in 2-4 concise sentences.
+          `ENGINE: Answer the player's question directly as the Storyteller/DM in 1-3 short sentences.
 Clarify established world facts, the active main quest, and genuinely available options. You may
 establish a small missing personal-world fact (such as whether the hero has a home) when it does not
 contradict state. Do not advance time or perform the action for them; if they want to do it, tell them
-to choose Act next. Do not put the answer in quotation marks.`,
+to choose Act next. Use plain words and no decorative description. Do not put the answer in quotation marks.`,
           player,
           { speaker: { kind: "dm", name: "Storyteller / DM" }, logKind: "dm" },
         );
@@ -315,8 +361,8 @@ appropriate check.`
       if (move.mood && move.move !== "change_scene") this.state.scene.mood = move.mood;
       if (move.quest) this.applyQuestUpdate(move.quest);
       this.state.pendingNpc = null;
-      let instruction = "ENGINE: Narrate the next story beat reacting to the last player action. Keep it TIGHT: 1-3 sentences, and a single short sentence is perfect for simple outcomes. Move the story forward - never re-describe what players already know.";
-      let presentation: { speaker: NarrationSpeaker; voice?: string; logKind: "dm" | "npc" } | undefined;
+      let instruction = "ENGINE: Narrate the next story beat in 1-3 short, plain sentences; prefer 1-2. Use direct words, few modifiers, and no metaphor. Move the story forward without repeating known details. Never mention private scene fields, visual prompts, or occupant lists.";
+      let presentation: { speaker: NarrationSpeaker; voice?: string; voiceSpeed?: number; logKind: "dm" | "npc" } | undefined;
 
       if (move.move === "request_check" && move.check) {
         const request = checkRequestFromIntent(move.check);
@@ -327,10 +373,10 @@ appropriate check.`
         } else {
           this.state.pendingNpc = null;
         }
-        instruction = `ENGINE: ${request.playerName} must attempt a ${request.skill} check (${request.reason}). Narrate a brief, tense lead-in (1-2 sentences) that ends at the moment of uncertainty. Do NOT reveal any outcome.`;
+        instruction = `ENGINE: ${request.playerName} must attempt a ${request.skill} check (${request.reason}). Give a clear lead-in of 1-2 short sentences that stops at the uncertain moment. Do NOT reveal any outcome.`;
       } else if (move.move === "change_scene" && move.scene) {
         this.applyScene(move.scene);
-        instruction = `ENGINE: The party arrives at ${move.scene.name}. Establish the new scene in 2-3 brisk sentences: atmosphere, one sensory detail, and something happening or worth investigating. Do not summarize the journey.`;
+        instruction = `ENGINE: The party arrives at ${move.scene.name}. Use 1-3 short, plain sentences: say where you are, give one useful detail, and show what needs attention. Do not summarize the journey or list occupants.`;
       } else if (move.move === "give_item" && move.item) {
         const c = this.state.party.find(p => p.name.toLowerCase() === move.item!.playerName.toLowerCase());
         if (c) {
@@ -343,10 +389,12 @@ appropriate check.`
       if (mode === "speak" && move.move !== "request_check" && move.npc) {
         const profile = this.npcVoice(move.npc);
         instruction = `ENGINE: Reply only as ${JSON.stringify(profile.name)} in direct spoken dialogue.
-Give a substantial 2-4 sentence response consistent with this personality: ${profile.personality}.
-Do not add storyteller narration, headings, or quotation marks. Do not speak or decide for the player.`;
+Give a useful 1-3 sentence response consistent with this personality: ${profile.personality}.
+Use short, natural spoken language. Do not add storyteller narration, headings, stage directions,
+or quotation marks. Do not speak or decide for the player.`;
         presentation = {
-          speaker: { kind: "npc", name: profile.name }, voice: profile.voice, logKind: "npc",
+          speaker: { kind: "npc", name: profile.name }, voice: profile.voice,
+          voiceSpeed: profile.voiceSpeed, logKind: "npc",
         };
       }
 
@@ -395,14 +443,15 @@ Do not add storyteller narration, headings, or quotation marks. Do not speak or 
         await this.narrateAndSpeak(
           `ENGINE: Reply only as ${JSON.stringify(profile.name)} in direct dialogue after the resolved
 social check. Honor the mechanical result exactly. On failure, preserve the active quest by offering
-a cost, complication, alternative route, or new requirement instead of a dead end. Use 2-4 concise
-sentences, no headings, narration, quotation marks, or player dialogue.`,
+a cost, complication, alternative route, or new requirement instead of a dead end. Use 1-3 short,
+natural spoken sentences, no headings, narration, stage directions, quotation marks, or player dialogue.`,
           player,
-          { speaker: { kind: "npc", name: profile.name }, voice: profile.voice, logKind: "npc" },
+          { speaker: { kind: "npc", name: profile.name }, voice: profile.voice,
+            voiceSpeed: profile.voiceSpeed, logKind: "npc" },
         );
       } else {
         await this.narrateAndSpeak(
-          "ENGINE: Narrate what happens given that mechanical result (1-3 sentences, punchy). Honor it exactly - do not soften a failure or cheapen a success. A failure changes the cost, danger, or available route instead of erasing the active quest. If the result completes what the player was attempting (like passing through a door or portal), the world MOVES: the next beat happens on the other side. Natural 1/20 do not automatically change an ability check result.",
+          "ENGINE: Narrate the result in 1-3 short, plain sentences. Honor it exactly: do not soften failure or cheapen success. Failure changes the cost, danger, or route instead of erasing the main quest. If the attempt moved the player through a door or portal, the next beat happens on the other side. Natural 1/20 do not automatically change an ability check result.",
           player,
         );
       }
@@ -454,7 +503,7 @@ sentences, no headings, narration, quotation marks, or player dialogue.`,
         isMain: true,
       });
       const narration = await this.narrateAndSpeak(
-        `ENGINE: Open the adventure. Establish where you are and why the adventure starts here, ending on an immediate hook (3-5 sentences). Never describe a solo player as traveling with their own character.`,
+        `ENGINE: Open the adventure in 2-3 short, plain sentences. Say where you are, why the adventure starts now, and end on one immediate hook. Never describe a solo player as traveling with their own character. Never list visible subjects or other private scene data.`,
         party.length === 1 ? party[0]!.name : undefined,
       );
       this.state.scene.description = narration.slice(0, 500);
@@ -477,12 +526,14 @@ sentences, no headings, narration, quotation marks, or player dialogue.`,
     presentation: {
       speaker: NarrationSpeaker;
       voice?: string;
+      voiceSpeed?: number;
       logKind: "dm" | "npc";
     } = { speaker: { kind: "dm", name: "Storyteller" }, logKind: "dm" },
   ): Promise<string> {
     this.broadcast({ type: "narration_start", speaker: presentation.speaker });
     const voice = presentation.voice ?? this.state.narratorVoice;
-    const sentences = new SentenceStream(s => this.queueAudio(s, voice));
+    const voiceSpeed = presentation.voiceSpeed ?? 1;
+    const sentences = new SentenceStream(s => this.queueAudio(s, voice, voiceSpeed));
     const full = await narrate(this.state, this.history, instruction, chunk => {
       this.broadcast({ type: "narration_chunk", text: chunk });
       sentences.push(chunk);
@@ -497,7 +548,7 @@ sentences, no headings, narration, quotation marks, or player dialogue.`,
   }
 
   /** Voice synthesis runs strictly in order but never blocks narration. */
-  private queueAudio(sentence: string, voice: string = this.state.narratorVoice): void {
+  private queueAudio(sentence: string, voice: string = this.state.narratorVoice, speed = 1): void {
     const epoch = this.audioEpoch;
     this.audioChain = this.audioChain
       .then(async () => {
@@ -506,7 +557,7 @@ sentences, no headings, narration, quotation marks, or player dialogue.`,
         const controller = new AbortController();
         this.audioAbort = controller;
         try {
-          const url = await synthesize(sentence, voice, controller.signal);
+          const url = await synthesize(sentence, voice, controller.signal, speed);
           if (url && this.clients.size > 0 && epoch === this.audioEpoch)
             this.broadcast({ type: "audio", url, seq: this.audioSeq++ });
         } finally {
@@ -553,6 +604,7 @@ sentences, no headings, narration, quotation marks, or player dialogue.`,
     const key = npcKey(npc.name);
     const existing = this.state.npcVoices[key];
     if (existing) {
+      existing.voiceSpeed ??= castNpcVoice(existing).speed;
       if (existing.appearance.startsWith("distinctive fantasy") && npc.appearance.trim()) {
         existing.appearance = npc.appearance.trim();
         existing.portraitUrl = null;
@@ -563,19 +615,13 @@ sentences, no headings, narration, quotation marks, or player dialogue.`,
       this.ensureNpcPortrait(existing);
       return existing;
     }
-    const voices = CONFIG.npcVoices[npc.sex];
-    const personality = npc.personality.toLowerCase();
-    let index: number;
-    if (/fierce|gruff|rough|stern|angry|bold/.test(personality)) index = 0;
-    else if (/warm|kind|gentle|soft|patient|calm/.test(personality)) index = 1;
-    else if (/playful|sly|quick|young|mischievous|cheerful/.test(personality)) index = 2;
-    else if (/formal|cold|reserved|solemn|precise|noble/.test(personality)) index = 3;
-    else index = crypto.createHash("sha256").update(key).digest()[0]! % voices.length;
+    const delivery = castNpcVoice(npc);
     const profile: NpcVoiceProfile = {
       ...npc,
       name: npc.name.trim(),
       appearance: npc.appearance.trim(),
-      voice: voices[index % voices.length]!,
+      voice: delivery.voice,
+      voiceSpeed: delivery.speed,
       portraitUrl: null,
       portraitUrls: {},
     };

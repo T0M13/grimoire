@@ -85,11 +85,13 @@ See [docs/09-api.md](docs/09-api.md) to build your own client or let another AI 
 - AI Dungeon Master (local LLM via Ollama) with a two-pass design: it *chooses a move*
   (structured, schema-constrained), then narrates — a deterministic 5e SRD rules engine does
   all dice and math
-- Spoken narration (local Kokoro voice, male/female narrator) and per-NPC voices
+- Spoken narration (local Kokoro voice, male/female narrator) plus persistent per-NPC voices
+  with personality-matched delivery
 - Living-subject-free scene backgrounds plus hero, NPC, and creature portraits generated locally
   (ComfyUI + Stable Diffusion)
 - Full SRD level-1 character creator: 9 races, 12 classes, point-buy/array/rolled
-- Quest journal, scene map, character sheets, 36-movement adaptive procedural soundtrack, save slots
+- Non-blocking quest/map/sheet/settings docks, a restrained 36-movement adaptive procedural
+  soundtrack, and save slots
 - Act / Speak / Ask-DM intent modes; everything persists in SQLite on the host
 
 ## Digging deeper

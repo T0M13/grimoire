@@ -89,12 +89,27 @@ describe("living-subject-free art", () => {
 describe("synthesize", () => {
   it("passes a persistent NPC voice through unchanged", async () => {
     let requestedVoice = "";
+    let requestedSpeed = 0;
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
-      requestedVoice = JSON.parse(String(init?.body)).voice as string;
+      const body = JSON.parse(String(init?.body)) as { voice: string; speed: number };
+      requestedVoice = body.voice;
+      requestedSpeed = body.speed;
       return { ok: false } as Response;
     });
-    await expect(synthesize("Welcome back.", "af_bella")).resolves.toBeNull();
+    await expect(synthesize("Welcome back.", "af_bella", undefined, 0.94)).resolves.toBeNull();
     expect(requestedVoice).toBe("af_bella");
+    expect(requestedSpeed).toBe(0.94);
+    fetchMock.mockRestore();
+  });
+
+  it("bounds speaking rate before routing it to the sidecar", async () => {
+    let requestedSpeed = 0;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      requestedSpeed = (JSON.parse(String(init?.body)) as { speed: number }).speed;
+      return { ok: false } as Response;
+    });
+    await synthesize("Too fast.", "bm_fable", undefined, 99);
+    expect(requestedSpeed).toBe(2);
     fetchMock.mockRestore();
   });
 

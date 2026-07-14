@@ -8,6 +8,8 @@ vi.mock("./db.js", () => ({
 }));
 vi.mock("./dm.js", () => ({
   decideMove: vi.fn(), narrate: vi.fn(async () => "Test narration."),
+  sanitizePlayerFacingText: vi.fn((text: string) =>
+    text.replace(/\s*Visible living subjects:.*$/i, "").trimEnd()),
 }));
 vi.mock("./media.js", () => ({
   generatePortrait: vi.fn(async () => "/assets/img/test-avatar.png"),
@@ -21,9 +23,10 @@ vi.mock("./media.js", () => ({
   synthesize: vi.fn(async () => null),
 }));
 
-import { GameRoom } from "./game.js";
+import { castNpcVoice, GameRoom } from "./game.js";
 import { decideMove } from "./dm.js";
 import { getNpcPortrait } from "./media.js";
+import { loadCampaign } from "./db.js";
 
 class FakeSocket {
   readonly OPEN = 1;
@@ -52,6 +55,7 @@ describe("shared-room multiplayer foundation", () => {
     rooms.length = 0;
     vi.mocked(decideMove).mockReset();
     vi.mocked(getNpcPortrait).mockReturnValue({ cached: null, pending: null });
+    vi.mocked(loadCampaign).mockReset().mockReturnValue(null);
   });
 
   it("broadcasts one authoritative party snapshot to two isolated clients", async () => {
@@ -118,5 +122,58 @@ describe("shared-room multiplayer foundation", () => {
       .toBe("/assets/img/npc-mossback--painting--test.png");
     expect(latestState(alice)?.npcVoices.mossback?.portraitUrls?.painting)
       .toBe("/assets/img/npc-mossback--painting--test.png");
+  });
+
+  it("cleans legacy DM text while preserving legacy player text", () => {
+    const seed = new GameRoom();
+    const state = structuredClone(seed.state);
+    seed.shutdown();
+    state.scene.description = "Rain falls. Visible living subjects: Kael (you)";
+    state.log = [
+      { who: "dm", kind: "dm", text: "Rain falls. Visible living subjects: Kael (you)" },
+      { who: "Kael", text: "Visible living subjects: is that an engine label?" },
+    ];
+    vi.mocked(loadCampaign).mockReturnValue({
+      state,
+      history: [
+        { role: "assistant", content: "Rain falls. Visible living subjects: Kael (you)" },
+        { role: "user", content: "Visible living subjects: is that an engine label?" },
+      ],
+    });
+
+    const room = new GameRoom();
+    rooms.push(room);
+    expect(room.state.scene.description).toBe("Rain falls.");
+    expect(room.state.log.map(entry => entry.text)).toEqual([
+      "Rain falls.", "Visible living subjects: is that an engine label?",
+    ]);
+    expect(room.history.map(message => message.content)).toEqual([
+      "Rain falls.", "Visible living subjects: is that an engine label?",
+    ]);
+  });
+
+  it("casts stable voices and pacing from identity, sex, personality, and creature type", () => {
+    const warm = castNpcVoice({
+      name: "Mara", sex: "female", entityType: "person",
+      personality: "warm and patient", appearance: "middle-aged innkeeper",
+    });
+    const forceful = castNpcVoice({
+      name: "Captain Voss", sex: "male", entityType: "person",
+      personality: "stern and commanding", appearance: "scarred guard captain",
+    });
+    const ancientCreature = castNpcVoice({
+      name: "Mossback", sex: "male", entityType: "creature",
+      personality: "ancient and patient", appearance: "huge moss-covered guardian",
+    });
+
+    expect(warm.voice).toBe("af_bella");
+    expect(forceful.voice).toBe("am_onyx");
+    expect(ancientCreature.speed).toBeLessThan(warm.speed);
+    expect(warm.speed).toBeGreaterThanOrEqual(0.5);
+    expect(warm.speed).toBeLessThanOrEqual(2);
+    expect(castNpcVoice({
+      name: "Mara", sex: "female", entityType: "person",
+      personality: "warm and patient", appearance: "middle-aged innkeeper",
+    })).toEqual(warm);
   });
 });

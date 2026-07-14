@@ -31,17 +31,19 @@ The game is fun for ONE player with text + voice only.
 - [ ] Complete remaining level-1 choices: fighting-style alternatives, Expertise targets, ranger
   choices, flexible tools/languages, individual spell selection, and coin-buy equipment
 - [x] Storyteller voice (Kokoro **CUDA sidecar**, ~190 ms/sentence, sentence-streamed with
-  early first-clause) + streamed text
+  early first-clause) + streamed text; American/British G2P pipelines share one loaded model
 - [x] Clickable current-scene exits plus an honest Scene Map drawer
 - [ ] Persistent discovered-location graph, stable exit IDs, locked/unknown paths, and region layout
 - [x] Save/resume campaign (survives server restart + page refresh); session summaries pending
 - [x] Settings: table-wide narrator choice, per-tab audio controls, named local save slots,
   disconnect autosave, new-game/load flow, and hidden process lifecycle with last-tab cleanup
-- [x] Tab-local procedural soundscape: 12 moods × 3 movements, deterministic scene/time/weather
-  scoring, 150-second movement changes, crossfades, combat/boss arrangements, gameplay cues, and
-  independent music/effects controls
+- [x] Tab-local procedural soundscape: 12 moods × 3 restrained movements, deterministic
+  scene/time/weather scoring, 150-second movement changes, soft crossfades, clean combat/boss
+  arrangements, gameplay cues, and independent music/effects controls
 - [x] Explicit Act / Speak / Ask DM input modes with labeled speakers
-- [x] Persistent per-NPC Kokoro voice identity selected from sex/personality descriptors
+- [x] Persistent per-NPC Kokoro voice identity and bounded delivery rate selected from
+  sex/personality descriptors, with no extra model call
+- [x] Non-modal Map, Sheet, Quest, and Settings docks that keep the action composer usable
 - [x] Structured main/side quest transitions and a Quest Journal drawer
 - [x] Grouped inventory cards with lightweight code-native category icons
 - **Playtest gate:** can you enjoyably play 2 hours solo and resume next day? *(ready to try)*

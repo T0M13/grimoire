@@ -63,8 +63,11 @@ want a hardcore tactical mode.)
   model + caching + async delivery (see architecture).
 - **TTS:** **Kokoro-82M** is the clear winner — Apache-2.0, <2 GB VRAM (runs on CPU too),
   many-times-faster-than-realtime, excellent narrator quality, multiple voices. Runs via
-  ONNX in Node (`kokoro-js`) or a tiny Python sidecar. Chatterbox (0.5B, MIT) later if we want
-  voice cloning for signature NPCs.
+  ONNX in Node (`kokoro-js`) or a tiny Python sidecar. The official pipeline exposes voice choice
+  and a bounded speaking-rate control; American and British voices need matching G2P pipelines.
+  Grimoire shares one loaded model across those lightweight pipelines, so NPC variation adds no
+  second model or narration-path LLM call. Chatterbox (0.5B, MIT) remains a later option for voice
+  cloning for signature NPCs.
 - **Music:** ACE-Step 1.5 (already installed locally) for **offline batch generation** of the
   mood library. Runtime music generation is a non-goal (latency + VRAM). Alternatives for
   texture one-shots: Stable Audio Open, MusicGen.
@@ -95,7 +98,7 @@ want a hardcore tactical mode.)
 - [dnd-llm-game](https://github.com/tegridydev/dnd-llm-game) · [GameMasterAI](https://github.com/deckofdmthings/GameMasterAI) · [ai-dungeon-master bot](https://github.com/samvoisin/ai-dungeon-master) · [aidnd](https://github.com/Tsinx/aidnd) · [CALYPSO](https://github.com/northern-lights-province/calypso-aiide-artifact)
 - [RTX 4070 LLM sizing](https://modelfit.io/gpu/rtx-4070/) · [llama.cpp 4070 tuning](https://www.xda-developers.com/tested-local-llms-on-rtx-4070-ti-for-real-work-only-one-earned-spot/) · [VRAM guide](https://www.promptquorum.com/local-llms/local-llm-hardware-guide-2026)
 - [Local image models 2026](https://localaimaster.com/blog/best-local-image-models-compared) · [image VRAM guide](https://willitrunai.com/blog/image-generation-vram-guide-2026)
-- [Local TTS 2026](https://localaimaster.com/blog/best-local-tts-models) · [Kokoro setup](https://localaimaster.com/blog/kokoro-tts-local-setup)
+- [Official Kokoro inference library](https://github.com/hexgrad/kokoro) · [official Kokoro model card](https://huggingface.co/hexgrad/Kokoro-82M)
 - [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5) · [open-source music gen](https://www.it-jim.com/blog/best-open-source-ai-music-generator/)
 - [Colyseus](https://colyseus.io/) · [Colyseus repo](https://github.com/colyseus/colyseus)
 - [Open5e](https://open5e.com/) · [5e-database](https://github.com/5e-bits/5e-database)

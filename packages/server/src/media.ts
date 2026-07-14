@@ -317,15 +317,17 @@ export async function synthesize(
   text: string,
   voice: "male" | "female" | string = "male",
   cancel?: AbortSignal,
+  speed = 1,
 ): Promise<string | null> {
   const clean = text.replace(/\*[^*]*\*/g, "").trim(); // strip stage directions
   if (!clean) return null;
   const voiceId = voice === "male" || voice === "female" ? CONFIG.narratorVoices[voice] : voice;
+  const speakingRate = Number.isFinite(speed) ? Math.min(2, Math.max(0.5, speed)) : 1;
   try {
     const res = await fetch(`${CONFIG.ttsUrl}/tts`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text: clean, voice: voiceId }),
+      body: JSON.stringify({ text: clean, voice: voiceId, speed: speakingRate }),
       signal: cancel
         ? AbortSignal.any([cancel, AbortSignal.timeout(30000)])
         : AbortSignal.timeout(30000),

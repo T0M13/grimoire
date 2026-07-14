@@ -17,18 +17,18 @@ export interface MusicProfile {
 }
 
 export const MUSIC_PROFILES: Record<Mood, MusicProfile> = {
-  tavern: { label: "Warm Hearth", root: 48, chord: [0, 4, 7], scale: [0, 2, 4, 7, 9], tempo: 88, pulseEvery: 2, waveform: "triangle", brightness: 1500, intensity: .75, percussion: false },
-  town: { label: "Market Roads", root: 50, chord: [0, 4, 7], scale: [0, 2, 4, 5, 7, 9], tempo: 96, pulseEvery: 2, waveform: "triangle", brightness: 1800, intensity: .7, percussion: false },
-  travel: { label: "Open Road", root: 45, chord: [0, 4, 7], scale: [0, 2, 4, 7, 9], tempo: 82, pulseEvery: 2, waveform: "triangle", brightness: 1350, intensity: .72, percussion: false },
-  forest: { label: "Ancient Canopy", root: 43, chord: [0, 3, 7], scale: [0, 2, 3, 7, 10], tempo: 68, pulseEvery: 3, waveform: "sine", brightness: 950, intensity: .62, percussion: false },
-  dungeon: { label: "Below The Stone", root: 38, chord: [0, 1, 7], scale: [0, 1, 3, 6, 7], tempo: 54, pulseEvery: 3, waveform: "sine", brightness: 620, intensity: .68, percussion: false },
-  night: { label: "Under Stars", root: 45, chord: [0, 3, 7], scale: [0, 2, 3, 7, 10], tempo: 58, pulseEvery: 4, waveform: "sine", brightness: 900, intensity: .5, percussion: false },
-  tension: { label: "Held Breath", root: 40, chord: [0, 1, 6], scale: [0, 1, 3, 6, 8], tempo: 76, pulseEvery: 1, waveform: "sawtooth", brightness: 760, intensity: .6, percussion: true },
-  mystery: { label: "Veiled Secret", root: 42, chord: [0, 3, 8], scale: [0, 1, 3, 7, 8], tempo: 64, pulseEvery: 3, waveform: "sine", brightness: 1100, intensity: .56, percussion: false },
-  combat: { label: "Battle Rhythm", root: 38, chord: [0, 3, 7], scale: [0, 3, 5, 7, 10], tempo: 124, pulseEvery: 1, waveform: "sawtooth", brightness: 1250, intensity: .9, percussion: true },
-  boss: { label: "Final Adversary", root: 35, chord: [0, 1, 7], scale: [0, 1, 3, 6, 7, 10], tempo: 108, pulseEvery: 1, waveform: "sawtooth", brightness: 1050, intensity: 1, percussion: true },
-  sorrow: { label: "Ashes And Memory", root: 45, chord: [0, 3, 7], scale: [0, 2, 3, 7, 8], tempo: 48, pulseEvery: 4, waveform: "sine", brightness: 780, intensity: .45, percussion: false },
-  victory: { label: "The Road Won", root: 48, chord: [0, 4, 7, 11], scale: [0, 2, 4, 7, 9, 11], tempo: 98, pulseEvery: 2, waveform: "triangle", brightness: 1900, intensity: .85, percussion: true },
+  tavern: { label: "Warm Hearth", root: 48, chord: [0, 4, 7], scale: [0, 2, 4, 7, 9], tempo: 88, pulseEvery: 2, waveform: "triangle", brightness: 1200, intensity: .62, percussion: false },
+  town: { label: "Market Roads", root: 50, chord: [0, 4, 7], scale: [0, 2, 4, 5, 7, 9], tempo: 96, pulseEvery: 2, waveform: "triangle", brightness: 1350, intensity: .6, percussion: false },
+  travel: { label: "Open Road", root: 45, chord: [0, 4, 7], scale: [0, 2, 4, 7, 9], tempo: 82, pulseEvery: 2, waveform: "triangle", brightness: 1100, intensity: .62, percussion: false },
+  forest: { label: "Ancient Canopy", root: 43, chord: [0, 3, 7], scale: [0, 2, 3, 7, 10], tempo: 68, pulseEvery: 3, waveform: "sine", brightness: 780, intensity: .54, percussion: false },
+  dungeon: { label: "Below The Stone", root: 38, chord: [0, 1, 7], scale: [0, 1, 3, 6, 7], tempo: 54, pulseEvery: 3, waveform: "sine", brightness: 520, intensity: .58, percussion: false },
+  night: { label: "Under Stars", root: 45, chord: [0, 3, 7], scale: [0, 2, 3, 7, 10], tempo: 58, pulseEvery: 4, waveform: "sine", brightness: 720, intensity: .44, percussion: false },
+  tension: { label: "Held Breath", root: 40, chord: [0, 1, 6], scale: [0, 1, 3, 6, 8], tempo: 76, pulseEvery: 2, waveform: "triangle", brightness: 640, intensity: .56, percussion: true },
+  mystery: { label: "Veiled Secret", root: 42, chord: [0, 3, 8], scale: [0, 1, 3, 7, 8], tempo: 64, pulseEvery: 3, waveform: "sine", brightness: 880, intensity: .5, percussion: false },
+  combat: { label: "Battle Rhythm", root: 38, chord: [0, 3, 7], scale: [0, 3, 5, 7, 10], tempo: 124, pulseEvery: 2, waveform: "triangle", brightness: 980, intensity: .82, percussion: true },
+  boss: { label: "Final Adversary", root: 35, chord: [0, 1, 7], scale: [0, 1, 3, 6, 7, 10], tempo: 108, pulseEvery: 2, waveform: "triangle", brightness: 820, intensity: .9, percussion: true },
+  sorrow: { label: "Ashes And Memory", root: 45, chord: [0, 3, 7], scale: [0, 2, 3, 7, 8], tempo: 48, pulseEvery: 4, waveform: "sine", brightness: 640, intensity: .4, percussion: false },
+  victory: { label: "The Road Won", root: 48, chord: [0, 4, 7, 11], scale: [0, 2, 4, 7, 9, 11], tempo: 98, pulseEvery: 2, waveform: "triangle", brightness: 1350, intensity: .72, percussion: true },
 };
 
 const variantPattern = (scale: readonly number[], movement: 1 | 2): readonly number[] => {
@@ -56,7 +56,9 @@ function musicVariants(base: MusicProfile, labels: readonly [string, string]): r
       root: base.root - 2,
       scale: variantPattern(base.scale, 2),
       tempo: Math.round(base.tempo * 1.06),
-      pulseEvery: Math.max(1, base.pulseEvery - 1),
+      // Percussive movements keep melodic notes off every beat. Rhythm supplies
+      // the energy without turning combat or tension into a dense wall of sound.
+      pulseEvery: Math.max(base.percussion ? 2 : 1, base.pulseEvery - 1),
       brightness: Math.round(base.brightness * 1.08),
       intensity: Math.min(1, base.intensity * .96),
     },
@@ -197,6 +199,23 @@ export function selectSoundscape(scene: SoundscapeScene, movementIndex = 0): Sou
 
 export const MOVEMENT_ROTATION_MS = 150_000;
 
+/** Conservative synthesis levels keep the procedural score behind narration. */
+export const CLEAN_MIX = {
+  trackPeak: .48,
+  chordFundamental: .028,
+  chordUpper: .012,
+  pulsePeak: .022,
+  percussionPeak: .052,
+  filterResonance: .35,
+  lfoRate: .045,
+  lfoDepthRatio: .07,
+} as const;
+
+/** At most two soft drum beats per bar, reserved for regular combat. */
+export function percussionBeatsForMood(mood: Mood): readonly number[] {
+  return mood === "combat" ? [0, 2] : [0];
+}
+
 /** Starts the tab-local movement clock and returns an idempotent cleanup function. */
 export function scheduleMovementRotation(advance: () => void, intervalMs = MOVEMENT_ROTATION_MS): () => void {
   const timer = globalThis.setInterval(advance, intervalMs);
@@ -294,12 +313,12 @@ class SoundscapeEngine {
       case "scene":
         this.tone(330, .38, "sine", .11, 494, 0);
         this.tone(494, .42, "sine", .08, 659, .11);
-        this.noise(.28, .035, 900, .03);
+        this.noise(.24, .018, 650, .03);
         break;
       case "roll":
-        this.noise(.07, .16, 2400, 0);
-        this.noise(.06, .13, 1900, .075);
-        this.noise(.05, .1, 1500, .14);
+        this.noise(.07, .09, 1500, 0);
+        this.noise(.06, .075, 1200, .075);
+        this.noise(.05, .055, 900, .14);
         break;
       case "success":
         this.tone(392, .18, "triangle", .12, 523, 0);
@@ -311,9 +330,9 @@ class SoundscapeEngine {
         this.tone(220, .36, "sine", .1, 147, .16);
         break;
       case "combat":
-        this.noise(.32, .28, 180, 0);
-        this.tone(82, .55, "sine", .2, 48, 0);
-        this.tone(165, .28, "sawtooth", .06, 110, .08);
+        this.noise(.3, .13, 160, 0);
+        this.tone(82, .5, "sine", .14, 48, 0);
+        this.tone(165, .26, "triangle", .04, 110, .08);
         break;
       case "event":
         this.tone(587, .2, "sine", .09, 740, 0);
@@ -334,11 +353,11 @@ class SoundscapeEngine {
   private createContext(): void {
     const context = new AudioContext();
     const compressor = context.createDynamicsCompressor();
-    compressor.threshold.value = -18;
-    compressor.knee.value = 18;
-    compressor.ratio.value = 5;
-    compressor.attack.value = .008;
-    compressor.release.value = .24;
+    compressor.threshold.value = -20;
+    compressor.knee.value = 24;
+    compressor.ratio.value = 3;
+    compressor.attack.value = .018;
+    compressor.release.value = .32;
     compressor.connect(context.destination);
     this.musicBus = context.createGain();
     this.effectsBus = context.createGain();
@@ -364,12 +383,12 @@ class SoundscapeEngine {
     const now = context.currentTime;
     const trackGain = context.createGain();
     trackGain.gain.setValueAtTime(0, now);
-    trackGain.gain.linearRampToValueAtTime(.72 * profile.intensity, now + 2.4);
+    trackGain.gain.linearRampToValueAtTime(CLEAN_MIX.trackPeak * profile.intensity, now + 2.4);
     trackGain.connect(this.musicBus);
     const filter = context.createBiquadFilter();
     filter.type = "lowpass";
     filter.frequency.value = profile.brightness;
-    filter.Q.value = .7;
+    filter.Q.value = CLEAN_MIX.filterResonance;
     filter.connect(trackGain);
     const nodes: AudioScheduledSourceNode[] = [];
     for (const [index, interval] of profile.chord.entries()) {
@@ -377,16 +396,16 @@ class SoundscapeEngine {
       const voiceGain = context.createGain();
       oscillator.type = index === 0 ? "sine" : profile.waveform;
       oscillator.frequency.value = frequency(profile.root + interval - 12);
-      oscillator.detune.value = index === 1 ? -4 : index === 2 ? 5 : 0;
-      voiceGain.gain.value = index === 0 ? .045 : .024;
+      oscillator.detune.value = index === 1 ? -2 : index === 2 ? 2 : 0;
+      voiceGain.gain.value = index === 0 ? CLEAN_MIX.chordFundamental : CLEAN_MIX.chordUpper;
       oscillator.connect(voiceGain).connect(filter);
       oscillator.start();
       nodes.push(oscillator);
     }
     const lfo = context.createOscillator();
     const lfoGain = context.createGain();
-    lfo.frequency.value = .08;
-    lfoGain.gain.value = Math.min(380, profile.brightness * .2);
+    lfo.frequency.value = CLEAN_MIX.lfoRate;
+    lfoGain.gain.value = Math.min(90, profile.brightness * CLEAN_MIX.lfoDepthRatio);
     lfo.connect(lfoGain).connect(filter.frequency);
     lfo.start();
     nodes.push(lfo);
@@ -423,31 +442,41 @@ class SoundscapeEngine {
     const note = profile.scale[(this.beat / profile.pulseEvery) % profile.scale.length | 0]!;
     const oscillator = context.createOscillator();
     const gain = context.createGain();
+    const filter = context.createBiquadFilter();
     const now = context.currentTime;
-    oscillator.type = profile.waveform === "sawtooth" ? "triangle" : profile.waveform;
+    oscillator.type = profile.waveform;
     oscillator.frequency.value = frequency(profile.root + note);
+    filter.type = "lowpass";
+    filter.frequency.value = Math.min(1000, profile.brightness * .72);
+    filter.Q.value = .25;
     gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(.035 * profile.intensity, now + .025);
-    gain.gain.exponentialRampToValueAtTime(.0001, now + Math.max(.28, 60 / profile.tempo));
-    oscillator.connect(gain).connect(output);
+    gain.gain.linearRampToValueAtTime(CLEAN_MIX.pulsePeak * profile.intensity, now + .045);
+    const release = Math.max(.45, 72 / profile.tempo);
+    gain.gain.exponentialRampToValueAtTime(.0001, now + release);
+    oscillator.connect(filter).connect(gain).connect(output);
     oscillator.start(now);
-    oscillator.stop(now + 1.2);
+    oscillator.stop(now + release + .05);
   }
 
   private musicPercussion(profile: MusicProfile, mood: Mood, output: AudioNode): void {
     const context = this.context;
     if (!context || this.musicMuted) return;
     const beatInBar = this.beat % 4;
-    if (beatInBar === 0 || (mood === "combat" && beatInBar === 2)) {
+    if (percussionBeatsForMood(mood).includes(beatInBar)) {
       const oscillator = context.createOscillator();
       const gain = context.createGain();
+      const filter = context.createBiquadFilter();
       const now = context.currentTime;
       oscillator.type = "sine";
       oscillator.frequency.setValueAtTime(mood === "boss" ? 72 : 88, now);
       oscillator.frequency.exponentialRampToValueAtTime(42, now + .16);
-      gain.gain.setValueAtTime(.09 * profile.intensity, now);
+      filter.type = "lowpass";
+      filter.frequency.value = mood === "boss" ? 135 : 170;
+      filter.Q.value = .25;
+      gain.gain.setValueAtTime(.0001, now);
+      gain.gain.linearRampToValueAtTime(CLEAN_MIX.percussionPeak * profile.intensity, now + .018);
       gain.gain.exponentialRampToValueAtTime(.0001, now + .24);
-      oscillator.connect(gain).connect(output);
+      oscillator.connect(filter).connect(gain).connect(output);
       oscillator.start(now);
       oscillator.stop(now + .3);
     }
@@ -486,7 +515,9 @@ class SoundscapeEngine {
     source.buffer = this.noiseBuffer;
     filter.type = "lowpass";
     filter.frequency.value = cutoff;
-    gain.gain.setValueAtTime(volume, start);
+    filter.Q.value = .3;
+    gain.gain.setValueAtTime(.0001, start);
+    gain.gain.linearRampToValueAtTime(volume, start + Math.min(.008, duration / 4));
     gain.gain.exponentialRampToValueAtTime(.0001, start + duration);
     source.connect(filter).connect(gain).connect(this.effectsBus);
     source.start(start);

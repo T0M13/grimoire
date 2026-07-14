@@ -80,6 +80,8 @@ hero. Create a different hero in each context and verify:
 4. Only the character named by a pending check sees and can use the Roll button.
 5. Narrator/art-style choices synchronize, while voice/music/effects volume remains per tab.
 6. Refresh reattaches the correct hero; closing one window leaves the other session running.
+7. Open a Map, Sheet, Quest, or Settings dock in either window and confirm that its composer remains
+   visible and usable; submitting from one window must still update both.
 
 For a LAN test, find the host's private IPv4 address with `ipconfig`, allow Node on Windows
 **Private** networks if prompted, and open `http://HOST-IP:5173` from the second device. Verify

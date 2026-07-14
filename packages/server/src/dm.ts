@@ -12,8 +12,8 @@ function stateBlock(state: PublicState): string {
     scene: {
       name: state.scene.name, kind: state.scene.kind, timeOfDay: state.scene.timeOfDay,
       weather: state.scene.weather, mood: state.scene.mood,
-      description: state.scene.description.slice(0, 400), exits: state.scene.exits,
-      visibleNpcs: state.scene.occupants.map(npc => npc.name),
+      description: sanitizePlayerFacingText(state.scene.description).slice(0, 400), exits: state.scene.exits,
+      presentNpcNames: state.scene.occupants.map(npc => npc.name),
     },
     party: state.party.map(c => ({
       name: c.name, sex: c.sex, age: c.age, class: c.className, level: c.level,
@@ -36,7 +36,115 @@ function stateBlock(state: PublicState): string {
       personality: npc.personality, appearance: npc.appearance,
     })),
   };
-  return `CAMPAIGN STATE (authoritative - do not contradict):\n${JSON.stringify(compact, null, 1)}`;
+  return `PRIVATE CAMPAIGN STATE (authoritative - do not contradict or quote field names):\n${JSON.stringify(compact, null, 1)}`;
+}
+
+/**
+ * Structured visual data belongs in state messages, never in prose shown to players. Small local
+ * models occasionally echo a prompt label, so this is also enforced after generation rather than
+ * trusting prompt compliance alone.
+ */
+const INTERNAL_LABELS = [
+  "visible living subjects", "visible subjects", "visible non-player people",
+  "visible non-player characters", "visible non-player creatures", "scene occupants",
+  "scene image prompt", "image prompt", "portrait subjects", "present npc names",
+  "non-player characters here", "presentnpcnames", "nonplayercharactershere",
+] as const;
+const NORMALIZED_INTERNAL_LABELS = INTERNAL_LABELS.map(label => label.replaceAll("-", " "));
+const INTERNAL_PROSE_MARKER = new RegExp(
+  `(?:${INTERNAL_LABELS.map(label => label.replaceAll(" ", "\\s+").replace("-", "[- ]"))
+    .join("|")})\\s*(?::|\\u2014|-|\\r?\\n)`,
+  "ig",
+);
+
+/** Find a private label only where a new sentence/line or Markdown label can begin. */
+function internalMarkerIndex(text: string, minimumIndex = 0): number {
+  INTERNAL_PROSE_MARKER.lastIndex = 0;
+  let marker: RegExpExecArray | null;
+  while ((marker = INTERNAL_PROSE_MARKER.exec(text))) {
+    if (marker.index < minimumIndex) continue;
+    const before = text.slice(0, marker.index);
+    if (/(?:^|[.!?]["')\]]?|\r?\n)\s*(?:[*_#>`-]+\s*)*$/u.test(before)) return marker.index;
+  }
+  return -1;
+}
+
+/** Return where a chunk suffix that could grow into a private label begins, or -1. */
+function canStartLabelAfter(text: string): boolean {
+  return !text || /(?:[.!?]["')\]]?|\r?\n)\s*(?:[*_#>`-]+\s*)*$/u.test(text);
+}
+
+function possibleMarkerSuffix(text: string, mayStartAtZero: boolean): number {
+  const first = Math.max(0, text.length - 48);
+  for (let index = first; index < text.length; index++) {
+    const before = text.slice(0, index);
+    if (!before ? !mayStartAtZero : !/(?:[.!?]["')\]]?|\r?\n)$/u.test(before)) continue;
+    const suffix = text.slice(index);
+    const words = suffix.replace(/^[\s*_#>`-]+/u, "").toLowerCase()
+      .replaceAll("-", " ").replace(/\s+/g, " ").trimEnd();
+    if (NORMALIZED_INTERNAL_LABELS.some(label => label.startsWith(words))) return index;
+  }
+  return -1;
+}
+
+function safePrefix(text: string): string {
+  const marker = internalMarkerIndex(text);
+  if (marker < 0) return text;
+  // Remove a dangling Markdown heading/bullet and whitespace immediately before the private label.
+  return text.slice(0, marker).replace(/[\s*_#>`-]+$/u, "").trimEnd();
+}
+
+/** Remove a leaked private scene/portrait label from persisted or completed narration. */
+export function sanitizePlayerFacingText(text: string): string {
+  return safePrefix(text);
+}
+
+/**
+ * Streaming equivalent of sanitizePlayerFacingText. It holds only a short tail so a label split
+ * across model chunks is caught before any part of it reaches the UI, log, or TTS queue.
+ */
+export class PlayerFacingTextStream {
+  private pending = "";
+  private complete = "";
+  private stopped = false;
+
+  constructor(private readonly emit: (text: string) => void) {}
+
+  push(chunk: string): void {
+    if (this.stopped || !chunk) return;
+    this.pending += chunk;
+    const context = this.complete.slice(-64);
+    const marker = internalMarkerIndex(context + this.pending, context.length);
+    if (marker >= context.length) {
+      this.publish(this.pending.slice(0, marker - context.length).replace(/[\s*_#>`-]+$/u, "").trimEnd());
+      this.pending = "";
+      this.stopped = true;
+      return;
+    }
+    const heldAt = possibleMarkerSuffix(this.pending, canStartLabelAfter(this.complete));
+    if (heldAt < 0) {
+      this.publish(this.pending);
+      this.pending = "";
+    } else if (heldAt > 0) {
+      this.publish(this.pending.slice(0, heldAt));
+      this.pending = this.pending.slice(heldAt);
+    }
+  }
+
+  flush(): string {
+    if (!this.stopped) {
+      const heldAt = possibleMarkerSuffix(this.pending, canStartLabelAfter(this.complete));
+      this.publish(heldAt >= 0 ? this.pending.slice(0, heldAt) : safePrefix(this.pending));
+    }
+    this.pending = "";
+    return this.complete;
+  }
+
+  private publish(text: string): void {
+    if (!text) return;
+    this.complete += text;
+    this.emit(text);
+  }
 }
 
 export function viewpointInstruction(playerName: string): string {
@@ -89,7 +197,8 @@ check should create a cost, complication, or alternate route rather than strand 
 Set optional "mood" when the scene's emotional state changes. Use "combat" when a fight
 starts, "boss" for a climactic enemy, "victory" when a major encounter ends, and return to the
 best fitting ambient mood after danger passes. Omit it when the mood has not changed.
-Always fill "suggestedActions" with 3 short, distinct things players could plausibly try next (imperative, max 6 words each).`;
+Always fill "suggestedActions" with 3 short, distinct things players could plausibly try next (imperative, max 6 words each).
+This JSON is private engine data. Never plan to repeat its field names or subject lists in narration.`;
 
 /** Pass 1: constrained decision. Guaranteed-parseable; one retry on semantic invalidity. */
 export async function decideMove(state: PublicState, history: ChatMessage[], playerAction: string): Promise<DmMove> {
@@ -123,5 +232,7 @@ export async function narrate(
   onChunk: (text: string) => void,
   viewpointName?: string,
 ): Promise<string> {
-  return generateStream(buildMessages(state, history, instruction, viewpointName), onChunk);
+  const visible = new PlayerFacingTextStream(onChunk);
+  await generateStream(buildMessages(state, history, instruction, viewpointName), chunk => visible.push(chunk));
+  return visible.flush();
 }

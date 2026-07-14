@@ -376,6 +376,8 @@ export interface Quest {
 
 export interface NpcVoiceProfile extends NpcSpeaker {
   voice: string;
+  /** Stable Kokoro speaking rate. Optional only while older saves are hydrated. */
+  voiceSpeed?: number;
   /** Legacy current-style URL; retained while older saves migrate. */
   portraitUrl?: string | null;
   /** Style-specific close-up portraits; missing entries paint asynchronously. */

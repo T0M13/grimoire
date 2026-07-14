@@ -33,11 +33,18 @@ export const CONFIG = {
   // best-in-class Kokoro narrators: af_heart is the only grade-A voice;
   // bm_fable is the warm British "storyteller" voice
   narratorVoices: { male: "bm_fable", female: "af_heart" } as Record<"male" | "female", string>,
-  // High-quality American-English Kokoro voices reserved for persistent NPC identities.
+  // High-quality American-English Kokoro voices reserved for persistent NPC identities. Named
+  // roles make personality casting explicit; the narrator voices are deliberately not reused.
   npcVoices: {
-    female: ["af_bella", "af_nicole", "af_kore", "af_sarah", "af_aoede"],
-    male: ["am_fenrir", "am_michael", "am_puck", "am_eric", "am_onyx"],
-  } as Record<"male" | "female", readonly string[]>,
+    female: {
+      forceful: "af_kore", warm: "af_bella", lively: "af_aoede",
+      formal: "af_sarah", neutral: "af_nicole",
+    },
+    male: {
+      forceful: "am_onyx", warm: "am_michael", lively: "am_puck",
+      formal: "am_eric", neutral: "am_fenrir",
+    },
+  } as Record<"male" | "female", Record<"forceful" | "warm" | "lively" | "formal" | "neutral", string>>,
   checkpoint: "DreamShaper_8_pruned.safetensors",
   lcmLora: "lcm-lora-sdv15.safetensors",
   /** Table-selectable scene-art styles. Each is locked so a campaign reads as one artist's work. */

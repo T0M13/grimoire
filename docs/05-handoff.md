@@ -31,8 +31,11 @@ dialogue/audio, name-only reconnect identity, and no host authorization or priva
   HP/AC; the server rebuilds and rejects mechanically invalid sheets.
 - Background portrait generation with a `?` placeholder until the image is ready.
 - Active-player narration viewpoint: the storyteller addresses the character as "you/your" and
-  solo openings cannot describe the player as accompanying their own character.
-- Clickable party badges and a character-sheet drawer for every party member.
+  solo openings cannot describe the player as accompanying their own character. A streaming and
+  persistence scrubber prevents private visual/occupant labels from reaching player-facing prose.
+- Plain-language narration uses short direct sentences, few modifiers, and no decorative metaphors.
+- Clickable party badges and a character-sheet dock for every party member. Map, Quests, and
+  Settings use the same non-modal dock while the action composer remains usable.
 - Constrained two-pass AI DM: structured move selection, then streamed narration.
 - Deterministic rules engine for dice, skill checks, damage, and healing; ability checks correctly
   do not auto-succeed/fail on natural 20/1. The model chooses a named difficulty category and code
@@ -43,15 +46,16 @@ dialogue/audio, name-only reconnect identity, and no host authorization or priva
   close-up portrait asynchronously; dialogue rows and the visible-scene rail show `?` until ready.
 - Kokoro CUDA narration using `bm_fable` (male) and `af_heart` (female).
 - Per-tab mute, volume, and pause/resume. Muting cuts the current sentence immediately.
-- Per-tab Web Audio soundscape covering all 12 scene moods with three movements each. A stable scene
+- Per-tab Web Audio soundscape covering all 12 scene moods with three restrained movements each. A stable scene
   hash picks the opening movement; location kind, time, and weather modify it; long scenes rotate
   every 150 seconds. Crossfades, combat/boss arrangements, gameplay cues, and independent persisted
   music/effects controls remain asset-free and browser-local.
 - Table-wide narrator selection persisted in campaign state.
 - Explicit Act, Speak, and Ask DM intent modes. Speak requires a substantive direct NPC response;
   Ask DM yields a labeled out-of-character Storyteller/DM answer without advancing time.
-- Named NPCs receive a campaign-persistent Kokoro voice distinct from the narrator. Sex chooses the
-  pool and personality descriptors influence the stable selection; social-check reactions retain it.
+- Named NPCs receive a campaign-persistent Kokoro voice distinct from the narrator. Sex and
+  personality choose a stable voice and bounded delivery rate; social-check reactions retain both.
+  American and British pronunciation pipelines share one model, so this does not add VRAM residency.
 - Structured quest start/advance/complete/fail events, one opening main quest fallback, and a Quest
   Journal with active/completed/failed presentation.
 - Inventory sheet cards group duplicates and use code-native category icons without binary assets.
@@ -166,15 +170,18 @@ Current manual regression checklist:
 
 - Visit every creator tab, randomize a character, review the level-1 sheet, join, see `?`, then see
   the generated portrait.
-- Open your own and another party member's sheet.
+- Open your own and another party member's sheet, then type and submit with the dock still open.
+  Repeat with Map, Quests, and Settings; on mobile, scroll the dock without covering the composer.
 - Switch narrator sex and verify the next sentence uses the selected voice.
 - During narration: pause, resume, change volume, then mute mid-sentence.
-- In Settings, independently mute and adjust music/effects; confirm the Now Playing label matches
-  the scene, time, and weather; wait for or temporarily shorten the movement interval and confirm a
+- In Settings, independently mute and adjust music/effects; confirm the quieter mix sits behind
+  narration and the Now Playing label matches the scene, time, and weather; wait for or temporarily shorten the movement interval and confirm a
   same-scene variation; verify choices, rolls, combat, and boss arrangements.
 - Use Speak with two different NPCs, then revisit the first; verify direct replies, distinct voices,
-  stable voice reuse, `?` → close-up portrait, and style-specific portrait reuse. Repeat with one
+  stable voice/rate reuse, `?` → close-up portrait, and style-specific portrait reuse. Repeat with one
   named creature. Storyteller narration must never receive an avatar.
+- Start or resume the current save and confirm no prose contains private labels such as
+  `Visible living subjects`, `scene occupants`, `image prompt`, or portrait instructions.
 - Confirm freshly painted scenes contain no people, faces, animals, or monsters, including an old
   save whose stored image prompt mentioned a figure. Open Map and exercise every current exit.
 - Multiplayer: use two isolated browser profiles, join two different heroes, verify both converge

@@ -229,15 +229,30 @@ function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>;
   const [input, setInput] = useState("");
   const [intentMode, setIntentMode] = useState<"act" | "speak" | "ask_dm">("act");
   const [premise, setPremise] = useState("");
-  const [sheetFor, setSheetFor] = useState<string | null>(null); // character id
-  const [mapOpen, setMapOpen] = useState(false);
-  const [questsOpen, setQuestsOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [openPanel, setOpenPanel] = useState<
+    | { kind: "sheet"; characterId: string }
+    | { kind: "map" | "quests" | "settings" }
+    | null
+  >(null);
   const { state } = game;
   if (!state) return null;
   const notStarted = state.scene.kind === "fireside";
   const myCheck = state.pendingCheck && state.pendingCheck.playerName.toLowerCase() === myName.toLowerCase();
-  const sheetCharacter = sheetFor ? state.party.find(c => c.id === sheetFor) ?? null : null;
+  const myCharacter = state.party.find(c => c.name.toLowerCase() === myName.toLowerCase()) ?? null;
+  const sheetCharacter = openPanel?.kind === "sheet"
+    ? state.party.find(c => c.id === openPanel.characterId) ?? null
+    : null;
+  // A loaded/new campaign can replace the party while a sheet is open. Only
+  // reserve dock space when a panel can actually render.
+  const panelOpen = openPanel?.kind === "sheet" ? sheetCharacter !== null : openPanel !== null;
+
+  const togglePanel = (next: NonNullable<typeof openPanel>) => {
+    setOpenPanel(current => {
+      const isSame = current?.kind === next.kind
+        && (next.kind !== "sheet" || (current.kind === "sheet" && current.characterId === next.characterId));
+      return isSame ? null : next;
+    });
+  };
 
   const act = (text: string, mode: "act" | "speak" | "ask_dm" = intentMode) => {
     if (!text.trim()) return;
@@ -246,14 +261,14 @@ function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>;
   };
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden">
+    <div className="relative h-[100dvh] w-screen overflow-hidden">
       <SceneArt url={state.scene.imageUrl} />
       <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/35 to-black/25" />
 
       {/* top bar */}
-      <div className="absolute top-0 inset-x-0 flex items-center justify-between px-5 py-3 text-sm text-stone-300/90">
-        <div className="narration text-lg text-amber-100/85">{state.scene.name}</div>
-        <div className="flex items-center gap-3">
+      <div className="absolute top-0 inset-x-0 z-10 flex items-center justify-between gap-2 px-3 py-3 text-sm text-stone-300/90 sm:px-5">
+        <div className="narration min-w-0 truncate text-base text-amber-100/85 sm:text-lg">{state.scene.name}</div>
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
           {state.scene.exits.length > 0 && (
             <div className="hidden md:flex gap-2">
               {state.scene.exits.map(e => (
@@ -270,38 +285,43 @@ function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>;
               {game.audio.paused ? "Resume" : "Pause"}
             </button>
           )}
-          <button onClick={() => setSheetFor(state.party.find(c => c.name.toLowerCase() === myName.toLowerCase())?.id ?? null)}
-            className="px-2.5 py-1 rounded-full border border-stone-600/60 bg-black/40 text-xs hover:border-amber-500/60">
+          <button onClick={() => myCharacter && togglePanel({ kind: "sheet", characterId: myCharacter.id })}
+            disabled={!myCharacter} aria-controls="game-side-panel"
+            aria-expanded={openPanel?.kind === "sheet" && openPanel.characterId === myCharacter?.id}
+            className="px-2.5 py-1 rounded-full border border-stone-600/60 bg-black/40 text-xs hover:border-amber-500/60 disabled:opacity-40">
             Sheet
           </button>
-          <button onClick={() => setMapOpen(true)}
+          <button onClick={() => togglePanel({ kind: "map" })}
+            aria-controls="game-side-panel" aria-expanded={openPanel?.kind === "map"}
             className="px-2.5 py-1 rounded-full border border-stone-600/60 bg-black/40 text-xs hover:border-amber-500/60">
             Map
           </button>
-          <button onClick={() => setQuestsOpen(true)}
+          <button onClick={() => togglePanel({ kind: "quests" })}
+            aria-controls="game-side-panel" aria-expanded={openPanel?.kind === "quests"}
             className="px-2.5 py-1 rounded-full border border-stone-600/60 bg-black/40 text-xs hover:border-amber-500/60">
             Quests{state.quests.filter(q => q.status === "active").length > 0 ? ` · ${state.quests.filter(q => q.status === "active").length}` : ""}
           </button>
-          <button onClick={() => setSettingsOpen(true)} title="Settings" aria-label="Settings"
+          <button onClick={() => togglePanel({ kind: "settings" })} title="Settings" aria-label="Settings"
+            aria-controls="game-side-panel" aria-expanded={openPanel?.kind === "settings"}
             className="p-1.5 rounded-full border border-stone-600/60 bg-black/40 hover:border-amber-500/60">
             <GearIcon />
           </button>
         </div>
       </div>
 
-      {sheetCharacter && <SheetDrawer c={sheetCharacter} onClose={() => setSheetFor(null)} />}
-      {mapOpen && <MapDrawer scene={state.scene}
+      {sheetCharacter && <SheetDrawer c={sheetCharacter} onClose={() => setOpenPanel(null)} />}
+      {openPanel?.kind === "map" && <MapDrawer scene={state.scene}
         activeQuest={state.quests.find(q => q.isMain && q.status === "active")}
-        onExit={exit => { setMapOpen(false); act(`We head to ${exit}.`, "act"); }}
-        onClose={() => setMapOpen(false)} />}
-      {questsOpen && <QuestDrawer quests={state.quests} onClose={() => setQuestsOpen(false)} />}
-      {settingsOpen && <SettingsPanel game={game} sound={sound} onClose={() => setSettingsOpen(false)} />}
+        onExit={exit => act(`We head to ${exit}.`, "act")}
+        onClose={() => setOpenPanel(null)} />}
+      {openPanel?.kind === "quests" && <QuestDrawer quests={state.quests} onClose={() => setOpenPanel(null)} />}
+      {openPanel?.kind === "settings" && <SettingsPanel game={game} sound={sound} onClose={() => setOpenPanel(null)} />}
 
       {/* party rail */}
       <div className="absolute left-4 bottom-40 md:bottom-32 flex flex-col gap-2">
         {state.party.map(c => (
           <PartyBadge key={c.id} c={c} me={c.name.toLowerCase() === myName.toLowerCase()}
-            onClick={() => setSheetFor(c.id)} />
+            onClick={() => togglePanel({ kind: "sheet", characterId: c.id })} />
         ))}
       </div>
 
@@ -327,7 +347,7 @@ function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>;
       )}
 
       {/* bottom: narration + input */}
-      <div className="absolute bottom-0 inset-x-0 px-4 pb-4 flex flex-col items-center gap-3">
+      <div className={`absolute bottom-0 inset-x-0 z-10 px-4 pb-4 flex flex-col items-center gap-3 transition-[padding] duration-300 ${panelOpen ? "md:pr-[25.5rem]" : ""}`}>
         <Narration state={state} live={game.liveNarration} liveSpeaker={game.liveSpeaker} />
 
         {myCheck && !state.dmBusy ? (
@@ -562,18 +582,30 @@ function ItemIcon({ item }: { item: string }) {
 }
 
 function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  const closeRef = useRef(onClose);
+  const titleId = `side-panel-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-title`;
+
+  useEffect(() => { closeRef.current = onClose; }, [onClose]);
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeRef.current();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, []);
+
   return (
-    <div className="absolute inset-0 z-20" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/50" />
-      <div onClick={e => e.stopPropagation()}
-        className="fadein-fast absolute right-0 top-0 h-full w-full max-w-sm bg-stone-950/95 backdrop-blur border-l border-stone-800 overflow-y-auto">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-800 sticky top-0 bg-stone-950/95">
-          <div className="narration text-xl text-amber-100/90">{title}</div>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-200 text-sm px-2 py-1">Close</button>
-        </div>
-        <div className="px-5 py-4">{children}</div>
+    <aside id="game-side-panel" aria-labelledby={titleId}
+      className="fadein-fast absolute bottom-[9.75rem] left-2 right-2 top-14 z-20 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-stone-700/80 bg-stone-950/95 shadow-2xl shadow-black/70 backdrop-blur-md sm:left-auto sm:w-[min(24rem,calc(100vw-1rem))] md:bottom-4 md:right-4 md:top-16">
+      <div className="flex shrink-0 items-center justify-between border-b border-stone-800 bg-stone-950/95 px-5 py-3.5">
+        <h2 id={titleId} className="narration text-xl text-amber-100/90">{title}</h2>
+        <button type="button" onClick={onClose} aria-label={`Close ${title}`}
+          className="rounded-lg px-2 py-1 text-sm text-stone-400 hover:bg-stone-800/70 hover:text-stone-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500/70">
+          Close
+        </button>
       </div>
-    </div>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">{children}</div>
+    </aside>
   );
 }
 
@@ -797,7 +829,7 @@ function SettingsPanel({ game, sound, onClose }: { game: ReturnType<typeof useGa
           onChange={e => game.audio.setVolume(Number(e.target.value))}
           className="w-full accent-amber-600" />
       </label>
-      <p className="-mt-4 mb-6 text-[11px] leading-relaxed text-stone-600">The storyteller keeps the selected voice. Each named NPC receives a different persistent voice based on sex and personality.</p>
+      <p className="-mt-4 mb-6 text-[11px] leading-relaxed text-stone-600">The Storyteller keeps the selected voice. Each named NPC receives a persistent voice and speaking pace based on sex and personality.</p>
 
       <SectionTitle>Art style</SectionTitle>
       <div className="grid grid-cols-3 gap-2 mb-3">

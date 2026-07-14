@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MOODS } from "@grimoire/shared";
 import {
+  CLEAN_MIX,
   MOVEMENT_ROTATION_MS,
   MUSIC_PROFILES,
   MUSIC_VARIANTS,
   parseStoredVolume,
+  percussionBeatsForMood,
   sceneSoundscapeKey,
   scheduleMovementRotation,
   selectSoundscape,
@@ -47,6 +49,28 @@ describe("soundscape profiles", () => {
         expect(variant.scale.length).toBeGreaterThan(0);
       }
     }
+  });
+
+  it("uses restrained timbres, brightness, and melodic density", () => {
+    for (const mood of MOODS) {
+      for (const variant of MUSIC_VARIANTS[mood]) {
+        expect(["sine", "triangle"]).toContain(variant.waveform);
+        expect(variant.brightness).toBeLessThanOrEqual(1_500);
+        if (variant.percussion) expect(variant.pulseEvery).toBeGreaterThanOrEqual(2);
+      }
+    }
+
+    expect(CLEAN_MIX.trackPeak).toBeLessThanOrEqual(.5);
+    expect(CLEAN_MIX.chordUpper).toBeLessThan(CLEAN_MIX.chordFundamental);
+    expect(CLEAN_MIX.pulsePeak).toBeLessThan(CLEAN_MIX.chordFundamental);
+    expect(CLEAN_MIX.percussionPeak).toBeLessThanOrEqual(.055);
+    expect(CLEAN_MIX.filterResonance).toBeLessThanOrEqual(.4);
+  });
+
+  it("keeps percussion sparse while giving combat a steady half-bar pulse", () => {
+    expect(percussionBeatsForMood("combat")).toEqual([0, 2]);
+    for (const mood of MOODS.filter(mood => mood !== "combat"))
+      expect(percussionBeatsForMood(mood)).toEqual([0]);
   });
 });
 
