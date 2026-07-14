@@ -721,7 +721,9 @@ function SheetDrawer({
       <div className="flex items-center gap-4 mb-5">
         <Avatar c={c} className="w-20 h-20 rounded-xl" />
         <div>
-          <div className="text-stone-200">{c.subrace ?? c.raceName ?? "Human"} · {c.className} · Level {c.level}</div>
+          <div className="text-stone-200">
+            {c.raceName ?? "Human"}{c.subrace ? ` · ${c.subrace}` : ""} · {c.className} · Level {c.level}
+          </div>
           <div className="text-stone-400 text-sm capitalize">{c.age} {c.sex} · {c.background ?? "Acolyte"} · {c.alignment ?? "Neutral"}</div>
           <div className="text-stone-400 text-sm mt-1">{c.hp}/{c.maxHp} HP · AC {c.ac} · Proficiency +{c.proficiencyBonus}</div>
         </div>
