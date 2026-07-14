@@ -92,6 +92,10 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
 - Preserve the three player intent modes. `Act` may change the world, `Speak` must produce a direct
   NPC conversational response (or a social check with a later response), and `Ask DM` answers
   directly without advancing time or silently performing an action.
+- Preserve the pacing contract (docs/05-handoff.md, "Pacing and presentation contract"): stated
+  movement executes as `change_scene` that beat, beats stay 1-3 sentences, move selection biases
+  toward `request_check`, new player turns cancel stale narration audio (`cancelAudio(true)` +
+  `audio_stop`), and scene art uses the quality dpmpp_2m workflow, never the LCM draft sampler.
 - Persist NPC voice identity by normalized name. Keep narrator voices outside the NPC pool, route
   all voice audio through the existing cancellable per-tab queue, and never add TTS to the blocking
   narration path.

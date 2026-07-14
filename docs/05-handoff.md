@@ -1,6 +1,6 @@
 # 05 — Project handoff
 
-Last updated: 2026-07-13
+Last updated: 2026-07-14
 
 This is the fast orientation document for the next developer or AI working on Grimoire. Read
 the design documents for product intent; use this file for the exact implemented state.
@@ -149,6 +149,34 @@ Current manual regression checklist:
 - Open Quests and verify the opening main quest; inspect duplicate inventory item grouping/icons.
 - Create a named save, start a new game, load the save, and verify hero/story/voice restoration.
 - Close the final browser during narration; verify audio stops and reopening restores state.
+
+## Pacing and presentation contract (2026-07-14 playtest feedback)
+
+These behaviors were tuned after real play sessions and must be preserved:
+
+- **The story never stalls.** When a player states a decision ("I go through the portal"), the DM
+  executes it that beat. `MOVE_INSTRUCTION` marks movement intent as mandatory `change_scene`
+  ("MOVEMENT IS SACRED"), and `dm-system.md` forbids lingering on decided moments. A location is
+  worth 2-3 beats of description at most.
+- **Beats are short.** 1-3 sentences, single-sentence beats encouraged, `num_predict: 180` caps the
+  hard ceiling. Language stays simple; no purple prose.
+- **Rolls are the heartbeat.** The move-selection prompt biases toward `request_check` for any
+  real attempt (including crossing thresholds like portals); check outcomes are allowed to bend
+  the story. Only conversation, obvious facts, automatic tasks, and impossible attempts skip rolls.
+- **Stale narration is skipped.** A new player action or roll click calls `cancelAudio(true)`:
+  in-flight TTS aborts, queued sentences drop, clients get `audio_stop`, and the narrator starts
+  fresh with the new beat. Players who read faster than the narrator never wait for old audio.
+- **Scene art is quality-first.** Scene backgrounds use the same dpmpp_2m/karras 24-step sampler
+  as portraits (async, ~4 s; the LCM 6-step draft workflow was retired because people and creatures
+  rendered washed-out/glitchy). The negative prompt targets deformed faces/anatomy and washed-out
+  color. Cache keys include location name + composition-prompt hash, so distinct places get
+  distinct art and a changed prompt regenerates automatically.
+- **The pre-adventure Fireside is cozy on purpose** (warm hearth, armchairs, blankets, snowy
+  window) — it is the menu-screen mood, not an adventure scene.
+
+Regression additions for this contract: say "I go through the [door/portal/gate]" and verify the
+very next beat is a new scene; act mid-narration and verify the narrator cuts over to the new
+response; verify most non-trivial attempts request a roll.
 
 ## Next product work
 

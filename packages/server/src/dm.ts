@@ -58,17 +58,23 @@ export function buildMessages(
 }
 
 const MOVE_INSTRUCTION = `ENGINE: Choose your next DM move for the situation above. Respond ONLY with the JSON object.
-- "narrate": normal storytelling beat (default).
-- "request_check": the last player action has an uncertain, consequential outcome. Fill "check"
-  with a difficulty category; never calculate or output a numerical DC. Use this whenever success
-  is genuinely uncertain, failure has a meaningful consequence, and an ability or trained skill
-  matters. Do not roll for routine conversation, automatic success, or impossible actions.
-- "change_scene": the party moved to a genuinely new location. Fill "scene" fully. Its
+- "request_check": the player is ATTEMPTING something - climbing, sneaking, forcing, persuading,
+  deceiving, searching, recalling lore, noticing danger, crossing a threshold like a portal, or
+  anything else where an ability could matter and failure would cost something. PREFER this move:
+  when torn between narrate and request_check, request the check - rolls are the heartbeat of the
+  game and their outcomes may bend the story. Fill "check" with a difficulty category; never
+  calculate or output a numerical DC. Skip rolls only for ordinary conversation, obvious facts,
+  truly automatic tasks, and impossible attempts.
+- "change_scene": MOVEMENT IS SACRED. If the last player action states or implies going somewhere
+  (enter, leave, go through, step in, follow, travel, descend, flee), you MUST choose change_scene
+  NOW and put them in the new place - never answer movement with more description of the current
+  location. Also use it for any genuinely new location. Fill "scene" fully. Its
   "imagePrompt" must be a concrete camera composition: say interior/exterior, architecture and
   terrain, time/weather/lighting, and the visible NPCs plus what they are physically doing. Show
   the current story hook rather than an empty generic landscape. Use physical descriptions, not
   character names, and include no signs, captions, or written text.
 - "give_item": a player just legitimately obtained a specific item. Fill "item".
+- "narrate": plain storytelling beat - only when nothing above applies.
 When an NPC is directly responding, fill optional "npc" with their stable name, sex, and concise
 personality. Reuse established NPC facts from state.
 Use optional "quest" only for a real objective transition: start a main/side quest, advance its

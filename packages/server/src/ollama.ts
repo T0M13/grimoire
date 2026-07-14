@@ -45,8 +45,8 @@ export async function generateStream(
       messages,
       stream: true,
       keep_alive: "60m",
-      // num_predict caps a beat at ~5 sentences: keeps pacing snappy and bounds worst-case latency
-      options: { num_ctx: CONFIG.numCtx, temperature: 0.85, repeat_penalty: 1.1, num_predict: 220 },
+      // num_predict caps a beat at ~4 sentences: keeps pacing snappy and bounds worst-case latency
+      options: { num_ctx: CONFIG.numCtx, temperature: 0.85, repeat_penalty: 1.1, num_predict: 180 },
     }),
   });
   if (!res.ok || !res.body) { clearTimeout(stallTimer); throw new Error(`ollama ${res.status}: ${await res.text()}`); }

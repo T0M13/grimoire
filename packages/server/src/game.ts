@@ -41,7 +41,7 @@ function defaultState(): PublicState {
       mood: "mystery",
       description: "Embers crackle. Your tale has not yet begun.",
       exits: [],
-      imagePrompt: "glowing fireplace embers in a dark room, warm light on an old open book",
+      imagePrompt: "cozy stone hearth with a crackling warm fire, worn leather armchairs, thick blankets, steaming mugs on a small wooden table, book-lined walls, soft golden firelight, gentle snowy night visible through a small window, inviting and peaceful",
       imageUrl: null,
     },
     party: [],
@@ -233,6 +233,9 @@ export class GameRoom {
     if (this.state.party.length === 0 || this.state.scene.kind === "fireside")
       return this.send(ws, { type: "error", message: "Begin the campaign first." });
 
+    // the table has moved on - stop reading stale narration and start fresh with this turn
+    this.cancelAudio(true);
+
     const playerLine = mode === "speak"
       ? `${player} says to an NPC: "${text}"`
       : mode === "ask_dm"
@@ -269,7 +272,7 @@ appropriate check.`
       if (move.mood && move.move !== "change_scene") this.state.scene.mood = move.mood;
       if (move.quest) this.applyQuestUpdate(move.quest);
       this.state.pendingNpc = null;
-      let instruction = "ENGINE: Narrate the next story beat reacting to the last player action (2-4 sentences).";
+      let instruction = "ENGINE: Narrate the next story beat reacting to the last player action. Keep it TIGHT: 1-3 sentences, and a single short sentence is perfect for simple outcomes. Move the story forward - never re-describe what players already know.";
       let presentation: { speaker: NarrationSpeaker; voice?: string; logKind: "dm" | "npc" } | undefined;
 
       if (move.move === "request_check" && move.check) {
@@ -279,7 +282,7 @@ appropriate check.`
         instruction = `ENGINE: ${request.playerName} must attempt a ${request.skill} check (${request.reason}). Narrate a brief, tense lead-in (1-2 sentences) that ends at the moment of uncertainty. Do NOT reveal any outcome.`;
       } else if (move.move === "change_scene" && move.scene) {
         this.applyScene(move.scene);
-        instruction = `ENGINE: The party arrives at ${move.scene.name}. Establish the new scene in 3-4 sentences: atmosphere, one sensory detail, and two things worth investigating.`;
+        instruction = `ENGINE: The party arrives at ${move.scene.name}. Establish the new scene in 2-3 brisk sentences: atmosphere, one sensory detail, and something happening or worth investigating. Do not summarize the journey.`;
       } else if (move.move === "give_item" && move.item) {
         const c = this.state.party.find(p => p.name.toLowerCase() === move.item!.playerName.toLowerCase());
         if (c) {
@@ -323,6 +326,9 @@ Do not add storyteller narration, headings, or quotation marks. Do not speak or 
     const character = this.state.party.find(c => c.name.toLowerCase() === player.toLowerCase());
     if (!character) return;
 
+    // players decided - skip whatever the narrator was still reading
+    this.cancelAudio(true);
+
     const result = resolveCheck(character, check, this.rng);
     this.state.pendingCheck = null;
     const pendingNpc = this.state.pendingNpc;
@@ -346,7 +352,7 @@ sentences, no headings, narration, quotation marks, or player dialogue.`,
         );
       } else {
         await this.narrateAndSpeak(
-          "ENGINE: Narrate what happens given that mechanical result (2-4 sentences). Honor it exactly - do not soften a failure or cheapen a success. A failure changes the cost, danger, or available route instead of erasing the active quest. Natural 1/20 do not automatically change an ability check result.",
+          "ENGINE: Narrate what happens given that mechanical result (1-3 sentences, punchy). Honor it exactly - do not soften a failure or cheapen a success. A failure changes the cost, danger, or available route instead of erasing the active quest. If the result completes what the player was attempting (like passing through a door or portal), the world MOVES: the next beat happens on the other side. Natural 1/20 do not automatically change an ability check result.",
           player,
         );
       }

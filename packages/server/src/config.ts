@@ -34,5 +34,7 @@ export const CONFIG = {
     "the environment and visibly interacting, dramatic motivated lighting, consistent muted color palette, detailed concept art",
   imageNegative:
     "photo, photorealistic, modern, empty generic landscape, unrelated scenery, floating people, character lineup, " +
-    "text, letters, sign, caption, watermark, signature, low quality, blurry, deformed, duplicate people",
+    "text, letters, sign, caption, watermark, signature, low quality, blurry, duplicate people, " +
+    "deformed face, distorted face, ugly face, cross-eyed, mutated hands, extra limbs, bad anatomy, " +
+    "washed out, faded colors, hazy, overexposed",
 };

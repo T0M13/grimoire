@@ -20,14 +20,16 @@ export function sceneSignature(
   return `${slug}--${composition}`;
 }
 
-function lcmWorkflow(prompt: string, seed: number) {
+// Quality scene art: generation is fully async and never blocks the story, so we can afford
+// the same proper sampler as portraits (~4 s) instead of the 6-step LCM draft that made
+// people and creatures come out washed-out or glitchy.
+function sceneWorkflow(prompt: string, seed: number) {
   return {
     "1": { class_type: "CheckpointLoaderSimple", inputs: { ckpt_name: CONFIG.checkpoint } },
-    "2": { class_type: "LoraLoader", inputs: { model: ["1", 0], clip: ["1", 1], lora_name: CONFIG.lcmLora, strength_model: 1.0, strength_clip: 1.0 } },
-    "3": { class_type: "CLIPTextEncode", inputs: { clip: ["2", 1], text: `${prompt}, ${CONFIG.imageStyle}` } },
-    "4": { class_type: "CLIPTextEncode", inputs: { clip: ["2", 1], text: CONFIG.imageNegative } },
+    "3": { class_type: "CLIPTextEncode", inputs: { clip: ["1", 1], text: `${prompt}, ${CONFIG.imageStyle}` } },
+    "4": { class_type: "CLIPTextEncode", inputs: { clip: ["1", 1], text: CONFIG.imageNegative } },
     "5": { class_type: "EmptyLatentImage", inputs: { width: 896, height: 512, batch_size: 1 } },
-    "6": { class_type: "KSampler", inputs: { model: ["2", 0], positive: ["3", 0], negative: ["4", 0], latent_image: ["5", 0], seed, steps: 6, cfg: 1.5, sampler_name: "lcm", scheduler: "sgm_uniform", denoise: 1.0 } },
+    "6": { class_type: "KSampler", inputs: { model: ["1", 0], positive: ["3", 0], negative: ["4", 0], latent_image: ["5", 0], seed, steps: 24, cfg: 6.0, sampler_name: "dpmpp_2m", scheduler: "karras", denoise: 1.0 } },
     "7": { class_type: "VAEDecode", inputs: { samples: ["6", 0], vae: ["1", 2] } },
     "8": { class_type: "SaveImage", inputs: { images: ["7", 0], filename_prefix: "grimoire" } },
   };
@@ -50,7 +52,7 @@ async function generateSceneImage(scene: Scene, sig: string, file: string): Prom
   const res = await fetch(`${CONFIG.comfyUrl}/prompt`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ prompt: lcmWorkflow(scene.imagePrompt, seed) }),
+    body: JSON.stringify({ prompt: sceneWorkflow(scene.imagePrompt, seed) }),
   });
   const { prompt_id, error } = (await res.json()) as { prompt_id?: string; error?: unknown };
   if (error || !prompt_id) throw new Error(`comfyui rejected workflow: ${JSON.stringify(error)}`);
