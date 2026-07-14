@@ -114,7 +114,18 @@ game PC on the same LAN.
    $env:GRIMOIRE_PUBLIC_ORIGIN = "https://grimoire.your-domain.com"
    .\start.ps1
    ```
-   This makes Vite accept the domain and the client use `wss://` on the same origin.
+   Or save it once for future launches:
+   ```powershell
+   [Environment]::SetEnvironmentVariable(
+     "GRIMOIRE_PUBLIC_ORIGIN",
+     "https://grimoire.your-domain.com",
+     "User"
+   )
+   npm start
+   ```
+   `start.ps1` refreshes that saved User value even when the current terminal was opened earlier.
+   This makes Vite accept the domain and the client use `wss://` on the same origin without storing
+   the domain, proxy credentials, or access passwords in Git.
 5. **Pi-hole bonus**: add a local DNS record `grimoire.your-domain.com -> <NPM server IP>` so
    LAN players skip the internet round-trip entirely.
 
