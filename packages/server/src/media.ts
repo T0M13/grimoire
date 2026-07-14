@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import type { Scene } from "@grimoire/shared";
+import type { ArtStyle, Scene } from "@grimoire/shared";
 import { AUDIO_DIR, CONFIG, IMG_DIR } from "./config.js";
 
 fs.mkdirSync(IMG_DIR, { recursive: true });
@@ -11,22 +11,23 @@ fs.mkdirSync(AUDIO_DIR, { recursive: true });
 
 export function sceneSignature(
   s: Pick<Scene, "name" | "kind" | "timeOfDay" | "weather" | "mood" | "imagePrompt">,
+  artStyle: ArtStyle = "painting",
 ): string {
   // must stay a valid Windows filename: lowercase alnum and dashes only
   const slug = [s.name, s.kind, s.timeOfDay, s.weather, s.mood]
     .map(part => part.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32))
     .join("--");
-  const composition = crypto.createHash("sha256").update(s.imagePrompt).digest("hex").slice(0, 10);
-  return `${slug}--${composition}`;
+  const composition = crypto.createHash("sha256").update(`${s.imagePrompt}|${artStyle}`).digest("hex").slice(0, 10);
+  return `${slug}--${artStyle}--${composition}`;
 }
 
 // Quality scene art: generation is fully async and never blocks the story, so we can afford
 // the same proper sampler as portraits (~4 s) instead of the 6-step LCM draft that made
 // people and creatures come out washed-out or glitchy.
-function sceneWorkflow(prompt: string, seed: number) {
+function sceneWorkflow(prompt: string, seed: number, artStyle: ArtStyle) {
   return {
     "1": { class_type: "CheckpointLoaderSimple", inputs: { ckpt_name: CONFIG.checkpoint } },
-    "3": { class_type: "CLIPTextEncode", inputs: { clip: ["1", 1], text: `${prompt}, ${CONFIG.imageStyle}` } },
+    "3": { class_type: "CLIPTextEncode", inputs: { clip: ["1", 1], text: `${prompt}, ${CONFIG.sceneStyles[artStyle]}` } },
     "4": { class_type: "CLIPTextEncode", inputs: { clip: ["1", 1], text: CONFIG.imageNegative } },
     "5": { class_type: "EmptyLatentImage", inputs: { width: 896, height: 512, batch_size: 1 } },
     "6": { class_type: "KSampler", inputs: { model: ["1", 0], positive: ["3", 0], negative: ["4", 0], latent_image: ["5", 0], seed, steps: 24, cfg: 6.0, sampler_name: "dpmpp_2m", scheduler: "karras", denoise: 1.0 } },
@@ -40,19 +41,19 @@ function sceneWorkflow(prompt: string, seed: number) {
  * otherwise generates in the background and resolves with the URL when done.
  * NEVER await this in the narration path — subscribe to the promise instead.
  */
-export function getSceneImage(scene: Scene): { cached: string | null; pending: Promise<string> | null } {
-  const sig = sceneSignature(scene);
+export function getSceneImage(scene: Scene, artStyle: ArtStyle = "painting"): { cached: string | null; pending: Promise<string> | null } {
+  const sig = sceneSignature(scene, artStyle);
   const file = path.join(IMG_DIR, `${sig}.png`);
   if (fs.existsSync(file)) return { cached: `/assets/img/${sig}.png`, pending: null };
-  return { cached: null, pending: generateSceneImage(scene, sig, file) };
+  return { cached: null, pending: generateSceneImage(scene, sig, file, artStyle) };
 }
 
-async function generateSceneImage(scene: Scene, sig: string, file: string): Promise<string> {
+async function generateSceneImage(scene: Scene, sig: string, file: string, artStyle: ArtStyle): Promise<string> {
   const seed = crypto.randomBytes(4).readUInt32LE(0);
   const res = await fetch(`${CONFIG.comfyUrl}/prompt`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ prompt: sceneWorkflow(scene.imagePrompt, seed) }),
+    body: JSON.stringify({ prompt: sceneWorkflow(scene.imagePrompt, seed, artStyle) }),
   });
   const { prompt_id, error } = (await res.json()) as { prompt_id?: string; error?: unknown };
   if (error || !prompt_id) throw new Error(`comfyui rejected workflow: ${JSON.stringify(error)}`);

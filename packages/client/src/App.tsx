@@ -672,6 +672,17 @@ function SettingsPanel({ game, sound, onClose }: { game: ReturnType<typeof useGa
       </label>
       <p className="-mt-4 mb-6 text-[11px] leading-relaxed text-stone-600">The storyteller keeps the selected voice. Each named NPC receives a different persistent voice based on sex and personality.</p>
 
+      <SectionTitle>Art style</SectionTitle>
+      <div className="grid grid-cols-3 gap-2 mb-3">
+        {(["painting", "sketch", "cinematic"] as const).map(s => (
+          <button key={s} onClick={() => game.send({ type: "set_art_style", style: s })}
+            className={`rounded-xl border py-2 text-sm capitalize transition ${state.artStyle === s ? "border-amber-500/80 bg-amber-950/40 text-amber-200" : "border-stone-700 bg-stone-900/60 text-stone-400 hover:border-stone-500"}`}>
+            {s}
+          </button>
+        ))}
+      </div>
+      <p className="-mt-1 mb-6 text-[11px] leading-relaxed text-stone-600">Painting is classical oils; Sketch looks like aged ink drawings from an old tome. The current scene repaints in the new style.</p>
+
       <SectionTitle>Soundscape</SectionTitle>
       <div className="grid grid-cols-2 gap-2 mb-3">
         <button onClick={() => sound.setMusicMuted(!sound.musicMuted)}

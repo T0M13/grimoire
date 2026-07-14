@@ -294,6 +294,7 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("roll") }), // respond to a pending roll request
   z.object({ type: z.literal("new_campaign"), premise: z.string().max(300).optional() }),
   z.object({ type: z.literal("set_voice"), voice: SexSchema }),
+  z.object({ type: z.literal("set_art_style"), style: z.enum(["painting", "sketch", "cinematic"]) }),
   z.object({ type: z.literal("save_slot"), name: z.string().min(1).max(40) }),
   z.object({ type: z.literal("load_slot"), id: z.number().int() }),
   z.object({ type: z.literal("delete_slot"), id: z.number().int() }),
@@ -354,6 +355,10 @@ export interface SaveMeta {
   savedAt: string;
 }
 
+export const ART_STYLES = ["painting", "sketch", "cinematic"] as const;
+export const ArtStyleSchema = z.enum(ART_STYLES);
+export type ArtStyle = z.infer<typeof ArtStyleSchema>;
+
 export interface PublicState {
   campaignName: string;
   scene: Scene;
@@ -364,6 +369,7 @@ export interface PublicState {
   pendingNpc: NpcSpeaker | null;
   dmBusy: boolean;
   narratorVoice: Sex;
+  artStyle: ArtStyle;
   quests: Quest[];
   npcVoices: Record<string, NpcVoiceProfile>;
   saves: SaveMeta[];

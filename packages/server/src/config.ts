@@ -40,11 +40,21 @@ export const CONFIG = {
   } as Record<"male" | "female", readonly string[]>,
   checkpoint: "DreamShaper_8_pruned.safetensors",
   lcmLora: "lcm-lora-sdv15.safetensors",
-  /** Locked style so every scene reads as one artist's work. */
-  imageStyle:
-    "cinematic storybook fantasy illustration, painterly environmental storytelling, coherent architecture, " +
-    "clear indoor or outdoor spatial context, wide cinematic composition, characters naturally integrated into " +
-    "the environment and visibly interacting, dramatic motivated lighting, consistent muted color palette, detailed concept art",
+  /** Table-selectable scene-art styles. Each is locked so a campaign reads as one artist's work. */
+  sceneStyles: {
+    painting:
+      "classical oil painting, visible expressive brushstrokes, dramatic chiaroscuro lighting, rich muted palette, " +
+      "environmental storytelling, coherent architecture, characters naturally integrated and visibly interacting, " +
+      "wide composition, old-master fantasy artwork, canvas texture",
+    sketch:
+      "aged hand-drawn ink illustration on weathered parchment, fine crosshatching and expressive linework, " +
+      "sepia and faded earth tones, subtle watercolor wash accents, storybook plate from an ancient tome, " +
+      "environmental storytelling, characters naturally integrated and visibly interacting, wide composition",
+    cinematic:
+      "cinematic storybook fantasy illustration, painterly environmental storytelling, coherent architecture, " +
+      "clear indoor or outdoor spatial context, wide cinematic composition, characters naturally integrated into " +
+      "the environment and visibly interacting, dramatic motivated lighting, consistent muted color palette, detailed concept art",
+  } as Record<"painting" | "sketch" | "cinematic", string>,
   imageNegative:
     "photo, photorealistic, modern, empty generic landscape, unrelated scenery, floating people, character lineup, " +
     "text, letters, sign, caption, watermark, signature, low quality, blurry, duplicate people, " +

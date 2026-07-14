@@ -44,7 +44,7 @@ describe("sceneSignature", () => {
 
   it("is stable and filesystem-safe on Windows", () => {
     const sig = sceneSignature(scene);
-    expect(sig).toMatch(/^the-copper-cup--rainy-tavern--night--rain--tavern--[a-f0-9]{10}$/);
+    expect(sig).toMatch(/^the-copper-cup--rainy-tavern--night--rain--tavern--painting--[a-f0-9]{10}$/);
     expect(sig).toMatch(/^[a-z0-9-]+$/); // no |, /, \, : - all illegal in filenames
   });
   it("differs when any component differs", () => {
@@ -55,6 +55,10 @@ describe("sceneSignature", () => {
   it("keeps a consistent cached shot but distinguishes a new composition", () => {
     expect(sceneSignature(scene)).toBe(sceneSignature({ ...scene }));
     expect(sceneSignature(scene)).not.toBe(sceneSignature({ ...scene, imagePrompt: "empty tavern" }));
+  });
+  it("caches each art style separately", () => {
+    expect(sceneSignature(scene, "painting")).not.toBe(sceneSignature(scene, "sketch"));
+    expect(sceneSignature(scene, "sketch")).toBe(sceneSignature(scene, "sketch"));
   });
 });
 

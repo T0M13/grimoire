@@ -27,6 +27,7 @@ function hydrateState(state: PublicState): PublicState {
   state.quests ??= [];
   state.npcVoices ??= {};
   state.pendingNpc ??= null;
+  state.artStyle ??= "painting";
   return state;
 }
 
@@ -51,6 +52,7 @@ function defaultState(): PublicState {
     pendingNpc: null,
     dmBusy: false,
     narratorVoice: "male",
+    artStyle: "painting",
     quests: [],
     npcVoices: {},
     saves: [],
@@ -115,6 +117,13 @@ export class GameRoom {
       case "new_campaign": return this.onNewCampaign(ws, msg.premise ?? "");
       case "set_voice":
         this.state.narratorVoice = msg.voice;
+        this.persist();
+        this.broadcastState();
+        return;
+      case "set_art_style":
+        this.state.artStyle = msg.style;
+        this.state.scene.imageUrl = null;
+        this.refreshSceneImage(); // repaint the current scene in the chosen style
         this.persist();
         this.broadcastState();
         return;
@@ -537,9 +546,10 @@ sentences, no headings, narration, quotation marks, or player dialogue.`,
   /** Cache hit shows instantly; a miss paints in the background while the DM keeps talking. */
   private refreshSceneImage(): void {
     const scene = this.state.scene;
-    const signature = `${scene.name}|${scene.imagePrompt}`;
+    const artStyle = this.state.artStyle ?? "painting";
+    const signature = `${scene.name}|${scene.imagePrompt}|${artStyle}`;
     if (this.paintingScene === signature) return; // already painting this exact scene
-    const { cached, pending } = getSceneImage(scene);
+    const { cached, pending } = getSceneImage(scene, artStyle);
     if (cached) {
       scene.imageUrl = cached;
       this.broadcast({ type: "scene_image", url: cached });

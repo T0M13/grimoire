@@ -186,8 +186,12 @@ These behaviors were tuned after real play sessions and must be preserved:
 - **Scene art is quality-first.** Scene backgrounds use the same dpmpp_2m/karras 24-step sampler
   as portraits (async, ~4 s; the LCM 6-step draft workflow was retired because people and creatures
   rendered washed-out/glitchy). The negative prompt targets deformed faces/anatomy and washed-out
-  color. Cache keys include location name + composition-prompt hash, so distinct places get
-  distinct art and a changed prompt regenerates automatically.
+  color. Cache keys include location name + art style + composition-prompt hash, so distinct
+  places get distinct art and a changed prompt or style regenerates automatically.
+- **Art style is a table setting** (`PublicState.artStyle`, `set_art_style` message, Settings
+  drawer): `painting` (classical oils, the default), `sketch` (aged ink illustration on
+  parchment, like plates from an old tome), or `cinematic`. Style prompts live in
+  `CONFIG.sceneStyles`; switching repaints the current scene and each style caches separately.
 - **The pre-adventure Fireside is cozy on purpose** (warm hearth, armchairs, blankets, snowy
   window) — it is the menu-screen mood, not an adventure scene.
 
