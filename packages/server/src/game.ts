@@ -65,6 +65,7 @@ export class GameRoom {
   private audioAbort: AbortController | null = null;
   private audioEpoch = 0;
   private audioSeq = 0;
+  private paintingScene: string | null = null; // in-flight scene-art guard
   private rng: Rng;
   private idleShutdown: IdleShutdown;
 
@@ -90,6 +91,9 @@ export class GameRoom {
     this.idleShutdown.clientConnected();
     this.clients.set(ws, "");
     this.send(ws, { type: "state", state: this.state });
+    // safety net: if the current scene has no art (e.g. ComfyUI was still booting when we
+    // asked, or an earlier attempt failed), retry now that someone is looking at it
+    if (!this.state.scene.imageUrl) this.refreshSceneImage();
   }
 
   removeClient(ws: WebSocket): void {
@@ -141,6 +145,7 @@ export class GameRoom {
     this.state.saves = listSaves();
     this.persist();
     this.cancelAudio(true);
+    this.refreshSceneImage(); // repaint if the loaded scene's art is missing
     this.broadcastState();
   }
 
@@ -154,6 +159,7 @@ export class GameRoom {
     this.history = [];
     this.persist();
     this.cancelAudio(true);
+    this.refreshSceneImage(); // the fresh fireside needs its art painted
     this.broadcastState(); // everyone falls back to the join screen (their hero is gone)
   }
 
@@ -531,12 +537,16 @@ sentences, no headings, narration, quotation marks, or player dialogue.`,
   /** Cache hit shows instantly; a miss paints in the background while the DM keeps talking. */
   private refreshSceneImage(): void {
     const scene = this.state.scene;
+    const signature = `${scene.name}|${scene.imagePrompt}`;
+    if (this.paintingScene === signature) return; // already painting this exact scene
     const { cached, pending } = getSceneImage(scene);
     if (cached) {
       scene.imageUrl = cached;
       this.broadcast({ type: "scene_image", url: cached });
     } else if (pending) {
+      this.paintingScene = signature;
       pending
+        .finally(() => { if (this.paintingScene === signature) this.paintingScene = null; })
         .then(url => {
           // only apply if we're still in the same scene by the time the paint dries
           if (this.state.scene.name === scene.name) {
