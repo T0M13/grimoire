@@ -6,14 +6,19 @@ import {
 import {
   npcKey, SKILL_ABILITY, SKILLS, ABILITIES,
   type Ability, type AbilityScores, type ArtStyle, type Character, type NarrationSpeaker,
-  type NpcSpeaker, type NpcVoiceProfile, type Quest, type Scene, type Skill,
+  type NpcRelationship, type NpcSpeaker, type NpcVoiceProfile, type PartyPresence, type Quest,
+  type Scene, type Skill,
 } from "@grimoire/shared";
 import { assetUrl, useGame } from "./useGame";
 import { useSoundscape, type SoundscapeControls } from "./useSoundscape";
 import CharacterCreator from "./CharacterCreator";
+import JourneyGate, { type PendingJourney } from "./JourneyGate";
+import { readPlayerIdentity } from "./playerIdentity";
 
 const mod = (score: number) => Math.floor((score - 10) / 2);
 const fmtMod = (m: number) => (m >= 0 ? `+${m}` : `${m}`);
+const relationshipLabel = (status: NpcRelationship["status"]) =>
+  status.charAt(0).toUpperCase() + status.slice(1);
 
 const CLASSES = [
   { id: "fighter", label: "Fighter", blurb: "Steel and grit. Hits hard, stands firm." },
@@ -26,13 +31,60 @@ const CLASSES = [
 export default function App() {
   const game = useGame();
   const sound = useSoundscape(game.state, game.lastRoll);
-  const me = localStorage.getItem("grimoire.player");
-  const myName: string | null = me ? (JSON.parse(me).playerName as string) : null;
+  const [entryStep, setEntryStep] = useState<"choose" | "creating">("choose");
+  const [pendingJourney, setPendingJourney] = useState<
+    (PendingJourney & { afterNonce: number; afterErrorNonce: number }) | null
+  >(null);
+  const identity = readPlayerIdentity();
+  const myName = identity?.playerName ?? null;
   // case-insensitive: the server matches names case-insensitively on reattach
   const joined = !!game.state?.party.some(c => c.name.toLowerCase() === myName?.toLowerCase());
 
+  useEffect(() => {
+    const ready = game.journeyReady;
+    if (!ready || !pendingJourney || ready.nonce <= pendingJourney.afterNonce) return;
+    const sameJourney = ready.action === pendingJourney.action
+      && (ready.action !== "load" || ready.saveId === pendingJourney.saveId);
+    if (!sameJourney) return;
+    setPendingJourney(null);
+    setEntryStep("creating");
+  }, [game.journeyReady, pendingJourney]);
+
+  useEffect(() => {
+    if (pendingJourney && (!game.connected || game.errorNonce > pendingJourney.afterErrorNonce))
+      setPendingJourney(null);
+  }, [game.connected, game.errorNonce, pendingJourney]);
+
   if (!game.state) return <Center><Embers text="Reaching the storyteller" /></Center>;
-  if (!joined) return <CharacterCreator onJoin={p => game.send({ type: "join", ...p })} connected={game.connected} />;
+  if (!joined && entryStep === "choose") return <JourneyGate
+    state={game.state}
+    connected={game.connected}
+    pending={pendingJourney}
+    error={game.errorFlash}
+    onJoinCurrent={() => setEntryStep("creating")}
+    onNewJourney={() => {
+      setPendingJourney({
+        action: "new",
+        afterNonce: game.journeyReady?.nonce ?? 0,
+        afterErrorNonce: game.errorNonce,
+      });
+      game.send({ type: "new_game" });
+    }}
+    onLoadJourney={save => {
+      setPendingJourney({
+        action: "load",
+        saveId: save.id,
+        afterNonce: game.journeyReady?.nonce ?? 0,
+        afterErrorNonce: game.errorNonce,
+      });
+      game.send({ type: "load_slot", id: save.id });
+    }}
+  />;
+  if (!joined) return <CharacterCreator
+    onJoin={p => game.send({ type: "join", ...p })}
+    connected={game.connected}
+    onBack={() => setEntryStep("choose")}
+  />;
   return <GameScreen {...{ game, myName: myName!, sound }} />;
 }
 
@@ -309,7 +361,9 @@ function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>;
         </div>
       </div>
 
-      {sheetCharacter && <SheetDrawer c={sheetCharacter} onClose={() => setOpenPanel(null)} />}
+      {sheetCharacter && <SheetDrawer c={sheetCharacter}
+        relationships={state.npcRelationships[sheetCharacter.id] ?? {}}
+        onClose={() => setOpenPanel(null)} />}
       {openPanel?.kind === "map" && <MapDrawer scene={state.scene}
         activeQuest={state.quests.find(q => q.isMain && q.status === "active")}
         onExit={exit => act(`We head to ${exit}.`, "act")}
@@ -318,15 +372,21 @@ function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>;
       {openPanel?.kind === "settings" && <SettingsPanel game={game} sound={sound} onClose={() => setOpenPanel(null)} />}
 
       {/* party rail */}
-      <div className="absolute left-4 bottom-40 md:bottom-32 flex flex-col gap-2">
+      <aside aria-label="Party" className="absolute left-4 bottom-40 z-10 flex max-w-[calc(100vw-2rem)] flex-col gap-2 md:bottom-32">
+        <div className="px-1 text-[10px] uppercase tracking-[0.2em] text-stone-400/80">
+          Party · {game.partyPresence.filter(member => member.online).length}/{state.party.length} Online
+        </div>
         {state.party.map(c => (
           <PartyBadge key={c.id} c={c} me={c.name.toLowerCase() === myName.toLowerCase()}
+            presence={game.partyPresence.find(member => member.characterId === c.id)}
             onClick={() => togglePanel({ kind: "sheet", characterId: c.id })} />
         ))}
-      </div>
+      </aside>
 
       {!notStarted && state.scene.occupants.length > 0 && (
-        <SceneCast occupants={state.scene.occupants} profiles={state.npcVoices} artStyle={state.artStyle} />
+        <SceneCast occupants={state.scene.occupants} profiles={state.npcVoices}
+          relationships={myCharacter ? state.npcRelationships[myCharacter.id] ?? {} : {}}
+          artStyle={state.artStyle} />
       )}
 
       {/* dice result overlay */}
@@ -347,7 +407,9 @@ function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>;
       )}
 
       {/* bottom: narration + input */}
-      <div className={`absolute bottom-0 inset-x-0 z-10 px-4 pb-4 flex flex-col items-center gap-3 transition-[padding] duration-300 ${panelOpen ? "md:pr-[25.5rem]" : ""}`}>
+      {/* story column stays viewport-centered; only screens too narrow to fit both
+          chat and the docked panel shift it so the panel never covers the input */}
+      <div className={`absolute bottom-0 inset-x-0 z-10 px-4 pb-4 flex flex-col items-center gap-3 transition-[padding] duration-300 ${panelOpen ? "md:pr-[25.5rem] 2xl:pr-0" : ""}`}>
         <Narration state={state} live={game.liveNarration} liveSpeaker={game.liveSpeaker} />
 
         {myCheck && !state.dmBusy ? (
@@ -462,26 +524,33 @@ function SubjectPortrait({
 }
 
 function SceneCast({
-  occupants, profiles, artStyle,
+  occupants, profiles, relationships, artStyle,
 }: {
   occupants: NpcSpeaker[];
   profiles: Record<string, NpcVoiceProfile>;
+  relationships: Record<string, NpcRelationship>;
   artStyle: ArtStyle;
 }) {
   return (
     <aside aria-label="Visible Characters"
       className="absolute right-4 top-16 hidden max-w-52 flex-col gap-2 md:flex">
       <div className="text-right text-[10px] uppercase tracking-widest text-stone-400/70">In This Scene</div>
-      {occupants.map(subject => (
-        <div key={npcKey(subject.name)} className="flex items-center justify-end gap-2 rounded-xl border border-stone-700/45 bg-black/55 px-2 py-1.5 backdrop-blur-sm">
+      {occupants.map(subject => {
+        const relationship = relationships[npcKey(subject.name)];
+        return <div key={npcKey(subject.name)} title={relationship?.note || undefined}
+          className="flex items-center justify-end gap-2 rounded-xl border border-stone-700/45 bg-black/55 px-2 py-1.5 backdrop-blur-sm">
           <div className="min-w-0 text-right">
             <div className="truncate text-xs text-stone-200">{subject.name}</div>
-            <div className="truncate text-[10px] capitalize text-stone-500">{subject.entityType}</div>
+            <div className="truncate text-[10px] capitalize text-stone-500">
+              {relationship
+                ? `${relationshipLabel(relationship.status)} · Trust ${fmtMod(relationship.trust)} · Affection ${fmtMod(relationship.affection)}`
+                : subject.entityType}
+            </div>
           </div>
           <SubjectPortrait subject={subject} profile={profiles[npcKey(subject.name)]}
             artStyle={artStyle} className="h-11 w-11 shrink-0 rounded-lg" />
-        </div>
-      ))}
+        </div>;
+      })}
     </aside>
   );
 }
@@ -536,18 +605,35 @@ function Avatar({ c, className }: { c: Character; className: string }) {
   );
 }
 
-function PartyBadge({ c, me, onClick }: { c: Character; me: boolean; onClick: () => void }) {
+function PartyBadge({ c, me, presence, onClick }: { c: Character; me: boolean; presence?: PartyPresence; onClick: () => void }) {
   const pct = Math.round((c.hp / c.maxHp) * 100);
+  const activityLabel = presence?.activity === "acting" ? "Acting"
+    : presence?.activity === "speaking" ? "Speaking"
+      : presence?.activity === "asking_dm" ? "Asking DM"
+        : presence?.activity === "starting_journey" ? "Starting Journey"
+          : presence?.activity === "waiting_for_roll" ? "Roll Needed"
+            : presence?.activity === "resolving_roll" ? "Rolling"
+              : presence?.activity === "following" ? "Following"
+                : "Ready";
+  const status = !presence?.online
+    ? presence?.activity === "waiting_for_roll" ? `Offline · Roll Needed${presence.detail ? ` · ${presence.detail}` : ""}` : "Offline"
+    : presence.activity === "following" && presence.detail
+      ? presence.detail
+      : `${activityLabel}${presence.detail ? ` · ${presence.detail}` : ""}`;
+  const dotClass = !presence?.online ? "bg-stone-600"
+    : presence.activity === "ready" ? "bg-emerald-400"
+      : "bg-amber-400 animate-pulse";
   return (
-    <button onClick={onClick} title="View Character Sheet"
-      className={`text-left flex items-center gap-2.5 rounded-xl pl-1.5 pr-3 py-1.5 bg-black/55 backdrop-blur-sm border transition hover:border-amber-500/60 ${me ? "border-amber-600/50" : "border-stone-700/50"} min-w-44`}>
+    <button onClick={onClick} title={`${status} · View Character Sheet`}
+      className={`text-left flex max-w-full min-w-44 items-center gap-2.5 rounded-xl border bg-black/60 py-1.5 pl-1.5 pr-3 backdrop-blur-sm transition hover:border-amber-500/60 sm:min-w-52 ${me ? "border-amber-600/50" : "border-stone-700/50"}`}>
       <Avatar c={c} className="w-10 h-10 rounded-lg" />
-      <div className="flex-1">
-        <div className="text-sm leading-tight">{c.name} <span className="text-stone-400 text-xs">{c.className} {c.level}</span></div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 text-sm leading-tight"><span className={`h-2 w-2 shrink-0 rounded-full ${dotClass}`} /><span className="truncate">{c.name}</span> <span className="shrink-0 text-xs text-stone-400">{c.className} {c.level}</span></div>
         <div className="h-1.5 mt-1 rounded bg-stone-800 overflow-hidden">
           <div className={`h-full ${pct > 50 ? "bg-emerald-500" : pct > 25 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${pct}%` }} />
         </div>
         <div className="text-[10px] text-stone-400 mt-0.5">{c.hp}/{c.maxHp} HP · AC {c.ac}</div>
+        <div className={`mt-0.5 truncate text-[10px] ${presence?.online ? "text-amber-200/75" : "text-stone-600"}`}>{status}</div>
       </div>
     </button>
   );
@@ -609,7 +695,13 @@ function Drawer({ title, onClose, children }: { title: string; onClose: () => vo
   );
 }
 
-function SheetDrawer({ c, onClose }: { c: Character; onClose: () => void }) {
+function SheetDrawer({
+  c, relationships, onClose,
+}: {
+  c: Character;
+  relationships: Record<string, NpcRelationship>;
+  onClose: () => void;
+}) {
   const rules = CLASS_BUILD_RULES[c.className];
   const allSkills = SKILLS.map(s => ({
     skill: s,
@@ -622,6 +714,8 @@ function SheetDrawer({ c, onClose }: { c: Character; onClose: () => void }) {
     items[key] = (items[key] ?? 0) + 1;
     return items;
   }, {}));
+  const knownRelationships = Object.values(relationships)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return (
     <Drawer title={c.name} onClose={onClose}>
       <div className="flex items-center gap-4 mb-5">
@@ -702,6 +796,22 @@ function SheetDrawer({ c, onClose }: { c: Character; onClose: () => void }) {
       {(c.spells ?? []).length > 0 && <>
         <SectionTitle>Spells</SectionTitle>
         <p className="text-sm text-stone-300 mb-5">{c.spells.join(" · ")}</p>
+      </>}
+
+      {knownRelationships.length > 0 && <>
+        <SectionTitle>Relationships</SectionTitle>
+        <div className="mb-5 space-y-2">
+          {knownRelationships.map(relationship => (
+            <div key={npcKey(relationship.npcName)} className="rounded-xl border border-stone-800 bg-stone-900/55 px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm text-stone-200">{relationship.npcName}</span>
+                <span className="text-[10px] uppercase tracking-wide text-amber-300/80">{relationshipLabel(relationship.status)}</span>
+              </div>
+              <div className="mt-0.5 text-[11px] text-stone-500">Trust {fmtMod(relationship.trust)} · Affection {fmtMod(relationship.affection)}</div>
+              {relationship.note && <p className="mt-1 text-xs leading-relaxed text-stone-400">{relationship.note}</p>}
+            </div>
+          ))}
+        </div>
       </>}
 
       {(c.personalityTraits?.length || c.ideal || c.bond || c.flaw) && <>
@@ -841,6 +951,24 @@ function SettingsPanel({ game, sound, onClose }: { game: ReturnType<typeof useGa
         ))}
       </div>
       <p className="-mt-1 mb-6 text-[11px] leading-relaxed text-stone-600">Painting is classical oils; Sketch looks like aged ink drawings from an old tome. Backgrounds show places and story evidence only; named people and creatures use separate close-up portraits.</p>
+
+      <SectionTitle>Table Content</SectionTitle>
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        {(["standard", "mature"] as const).map(tone => (
+          <button key={tone} aria-pressed={state.contentTone === tone}
+            onClick={() => {
+              if (tone === "mature" && state.contentTone !== "mature"
+                && !confirm("Mature Mode changes the shared story and spoken audio for everyone. Enable it only after every player agrees. Continue?")) return;
+              game.send({ type: "set_content_tone", tone });
+            }}
+            className={`rounded-xl border py-2 text-sm capitalize transition ${state.contentTone === tone ? "border-amber-500/80 bg-amber-950/40 text-amber-200" : "border-stone-700 bg-stone-900/60 text-stone-400 hover:border-stone-500"}`}>
+            {tone === "standard" ? "Standard (Default)" : "Mature (Opt-In)"}
+          </button>
+        ))}
+      </div>
+      <p className="mb-6 text-[11px] leading-relaxed text-stone-600">
+        Mature Mode permits player-requested dark humor, brief fictional gore, and slowly earned adult consensual romance. It never creates mature material on its own; intimacy fades to black. Explicit sexual content, coercion, sexual violence, and minors remain excluded. This setting is shared by the whole table.
+      </p>
 
       <SectionTitle>Soundscape</SectionTitle>
       <div className="grid grid-cols-2 gap-2 mb-3">

@@ -12,12 +12,25 @@ $statePath = Join-Path $root "var\grimoire-host.json"
 $logDir = Join-Path $root "var\logs"
 $gamePort = if ($env:GRIMOIRE_GAME_PORT) { [int]$env:GRIMOIRE_GAME_PORT } else { 8787 }
 
+# Existing terminals do not notice environment variables saved at User scope after they opened.
+# Refresh the public origin here so `npm start` works immediately without storing host/domain
+# configuration in the repository. An explicit process value still wins.
+if (-not $env:GRIMOIRE_PUBLIC_ORIGIN) {
+  $savedPublicOrigin = [Environment]::GetEnvironmentVariable("GRIMOIRE_PUBLIC_ORIGIN", "User")
+  if ($savedPublicOrigin) { $env:GRIMOIRE_PUBLIC_ORIGIN = $savedPublicOrigin }
+}
+$playUrl = if ($env:GRIMOIRE_PUBLIC_ORIGIN) {
+  $env:GRIMOIRE_PUBLIC_ORIGIN.TrimEnd('/')
+} else {
+  "http://localhost:5173"
+}
+
 if (Test-Path $statePath) {
   try {
     $state = Get-Content -Raw $statePath | ConvertFrom-Json
     if (Get-Process -Id $state.supervisorPid -ErrorAction SilentlyContinue) {
       Write-Host "Grimoire is already running in the background." -ForegroundColor Green
-      Write-Host "Play at http://localhost:5173" -ForegroundColor Cyan
+      Write-Host "Play at $playUrl" -ForegroundColor Cyan
       exit 0
     }
   } catch { }
@@ -73,7 +86,7 @@ if (-not $ready) {
 }
 
 Write-Host ""
-Write-Host "  Running quietly in the background: http://localhost:5173" -ForegroundColor Cyan
+Write-Host "  Running quietly in the background: $playUrl" -ForegroundColor Cyan
 if ($Persistent) {
   Write-Host "  Persistent mode is enabled; use .\stop.ps1 to stop the stack." -ForegroundColor DarkGray
 } else {

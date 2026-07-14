@@ -38,6 +38,14 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
 8. **Prompts are not enforcement.** Give the narrator authoritative character facts, but guarantee
    mechanics through schemas and `packages/rules`. Ability checks do not auto-succeed/fail on a
    natural 20/1. The model emits a named difficulty; code maps it to DC 5/10/15/20/25/30.
+9. **Mature tone is shared opt-in, not an instruction.** Standard is the default. Mature permits
+   only player-requested dark humor, brief fictional gore, and adult consensual romance; intimacy
+   always fades to black. Never add explicit sexual description, minors, coercion, sexual violence,
+   incest, intoxicated/incapacitated consent, or eroticized captivity. Art remains nonsexual.
+10. **Relationships use fixed reducers.** The model may select a schema event, never trust/affection
+    numbers. Apply immediate events server-side and defer check-dependent events until the real roll.
+    Social checks can affect attitude but never create consent. Mutual romance needs Mature mode,
+    established trust/affection, an adult/elder hero, and an NPC explicitly established as an adult person.
 
 ## Architecture quick map (as implemented)
 
@@ -54,8 +62,9 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
   ComfyUI async queue + cache-by-scene-signature, Kokoro sentence streaming via
   `SentenceStream` with early first-clause emit), SQLite write-through (`db.ts`),
   config in `config.ts` (ports, models, style prompts).
-- `packages/client` — React/Vite/Tailwind v4. One screen: join → story. `CharacterCreator.tsx`
-  owns the compact guided SRD flow; `useGame.ts` owns the
+- `packages/client` — React/Vite/Tailwind v4. Flow: journey chooser → character creator → shared
+  story. `JourneyGate.tsx` owns New/Load/Join Current entry; `CharacterCreator.tsx` owns the compact
+  guided SRD flow; `useGame.ts` owns the
   socket, reconnection, and the sequential narration-audio queue. `useSoundscape.ts` owns the
   tab-local Web Audio music/SFX graph, mood crossfades, cue routing, and persisted controls.
   `App.tsx` includes SRD point-buy
@@ -95,9 +104,11 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
   NPC conversational response (or a social check with a later response), and `Ask DM` answers
   directly without advancing time or silently performing an action.
 - Preserve the pacing contract (docs/05-handoff.md, "Pacing and presentation contract"): stated
-  movement executes as `change_scene` that beat, beats stay 1-3 sentences, move selection biases
-  toward `request_check`, new player turns cancel stale narration audio (`cancelAudio(true)` +
-  `audio_stop`), and scene art uses the quality dpmpp_2m workflow, never the LCM draft sampler.
+  movement executes as `change_scene` that beat, beats stay 1-3 sentences, and exploration/needed
+  clues are free. Request a check only for real opposition, danger, or time pressure with an
+  interesting failure; never reroll the same failed attempt. New player turns cancel stale
+  narration audio (`cancelAudio(true)` + `audio_stop`), and scene art uses the quality dpmpp_2m
+  workflow, never the LCM draft sampler.
 - Keep establishing scene art free of every living subject. Put named people and creatures in
   `Scene.occupants`; generate their close-up portraits asynchronously with look/type/style in the
   cache signature; render `?` until ready. Never put a tiny face back into a wide SD1.5 scene.
@@ -108,6 +119,10 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
   narration path.
 - Apply quests only from schema-validated `QuestUpdate` intents through the server reducer. Never
   infer quest or mechanical state from narration text.
+- Apply NPC relationships only from schema-validated `RelationshipUpdate` events through the fixed
+  server reducer. Key them by stable character id and normalized NPC name, persist them in campaign
+  state, and never infer them from narration text. Check branches live in `pendingRelationship` until
+  the named player's deterministic roll resolves.
 - Do not implement advancement as free-form points. Read `docs/08-progression-and-content.md`, add
   SRD class-level data and deterministic reducers/tests, then expose only legal pending choices.
 - Keep music and effects non-blocking, browser-local, and disposable on `pagehide`. Scene mood is
@@ -117,13 +132,17 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
 - The shipped Map is a current-scene projection only. Do not call exit strings a persistent scene
   graph. Stable location/exit IDs and topology belong to the server-owned Phase 3 world model.
 - Today's multiplayer is one sequential public room: one scene, global `dmBusy`/pending roll,
-  name-only reconnect, and table-wide narration/audio. Test two heroes with isolated browser
-  profiles; never claim private dialogue, split parties, host authorization, or six-seat enforcement.
+  name-only reconnect, and table-wide narration/audio. `party_presence` is transient (never saved)
+  and shows Ready/Acting/Speaking/Asking DM/Rolling/Following/Offline while the saved `party` remains
+  the full roster. Active-table load/reset requires a joined hero, but there is no host role yet.
+  Test two heroes with isolated browser profiles; never claim private dialogue,
+  personal quest visibility, parallel actions, split parties, host authorization, or seat limits.
 - Asset cache keys include location name/kind/time/weather/mood plus a hash of the composition
   prompt, joined with `--`, lowercase alnum+dash only (Windows-safe filenames).
 - Narration for an active character must be second-person (`you/your`), never their own name or
   third-person pronouns. Parallel dialogue/event design lives in `docs/06-open-world-multiplayer.md`.
-- Prompts live in versioned files (`packages/server/prompts/`), not inline strings.
+- Base/content prompts live in versioned files (`packages/server/prompts/`). Both structured and
+  narration passes must receive the selected Standard/Mature policy and the absolute boundaries.
 - Windows gotchas: PowerShell 5.1 `Get-Content`/`Set-Content` mangles UTF-8 (use Write/Edit
   tools); `|` is illegal in filenames; prefer `curl.exe` over `Invoke-WebRequest` for binaries.
 

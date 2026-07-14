@@ -4,6 +4,22 @@ This document records the intended evolution from one shared story turn into a p
 text-first open world where players may split up, speak to different NPCs, pursue separate goals,
 and still experience important events together.
 
+## Current shared-room behavior
+
+The shipped room is shared co-op, not the parallel system below:
+
+- The saved `party` is the full campaign roster. A separate transient presence feed marks each hero
+  Ready, Acting, Speaking, Asking DM, Rolling, Following, or Offline. New heroes create a public
+  join event; connection churn stays transient and never enters a save slot.
+- Outside combat there is no fixed player order, but the room is sequential: the first action sent
+  while the Storyteller is idle takes the global `dmBusy` lock until its full beat resolves.
+- Every connected tab receives the same scene, log, quest journal, narration, NPC dialogue, audio,
+  art, and dice result. Actor-relative narration says "you" to the acting hero, but it is not yet
+  rendered separately for the other recipients.
+- A pending check blocks new actions and only the named hero can roll.
+- All current quests and conversations are party-public. Private side quests, separate locations,
+  and simultaneous activities require the recipient/location/activity model specified below.
+
 ## Player experience
 
 - Every player has a **Current Activity**: exploring, traveling, talking, fighting, resting, or
@@ -107,7 +123,8 @@ discarding the graph.
 
 ## Delivery slices
 
-1. Add quest/event journal UI on the current shared room. **Party quest foundation complete**;
+1. Add roster presence and quest/event journal UI on the current shared room. **Transient party
+   presence and the party quest foundation are complete**;
    personal/world scopes and deterministic world-event triggers remain.
 2. Add stable location IDs/graph exits, authoritative occupants, and location-scoped public feeds.
 3. Add private NPC conversation activities and recipient-scoped messages/audio.

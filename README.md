@@ -92,6 +92,8 @@ See [docs/09-api.md](docs/09-api.md) to build your own client or let another AI 
 - Full SRD level-1 character creator: 9 races, 12 classes, point-buy/array/rolled
 - Non-blocking quest/map/sheet/settings docks, a restrained 36-movement adaptive procedural
   soundtrack, and save slots
+- Per-hero persistent NPC trust, affection, friendship/rivalry, and conservatively gated adult
+  romance; shared Standard/Mature story tone with requested dark humor/gore and fade-to-black intimacy
 - Act / Speak / Ask-DM intent modes; everything persists in SQLite on the host
 
 ## Digging deeper

@@ -23,6 +23,19 @@ __pycache__/
 .env.*
 !.env.example
 *.local
+*.local.json
+config.local.*
+.htpasswd
+*.secret
+*.token
+*.key
+*.pem
+*.pfx
+*.p12
+credentials*.json
+secrets*.json
+.cloudflared/
+cloudflared/
 
 # Logs and editor/OS files
 *.log

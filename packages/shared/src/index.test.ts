@@ -12,7 +12,7 @@ describe("interaction protocol", () => {
     const result = DmMoveSchema.parse({
       move: "narrate",
       npc: {
-        name: "Mara", sex: "female", entityType: "person", personality: "wary but warm",
+        name: "Mara", sex: "female", entityType: "person", adult: true, personality: "wary but warm",
         appearance: "weathered ferryman in a moss-green coat",
       },
       quest: {
@@ -23,5 +23,33 @@ describe("interaction protocol", () => {
     });
     expect(result.npc?.name).toBe("Mara");
     expect(result.quest?.action).toBe("advance");
+  });
+
+  it("validates shared content tone changes", () => {
+    expect(ClientMessageSchema.parse({ type: "set_content_tone", tone: "mature" }))
+      .toEqual({ type: "set_content_tone", tone: "mature" });
+    expect(ClientMessageSchema.safeParse({ type: "set_content_tone", tone: "explicit" }).success)
+      .toBe(false);
+  });
+
+  it("accepts fixed relationship outcomes instead of model-authored numbers", () => {
+    const result = DmMoveSchema.parse({
+      move: "narrate",
+      npc: {
+        name: "Mara", sex: "female", entityType: "person", adult: true,
+        personality: "wary but warm", appearance: "weathered ferryman in a moss-green coat",
+      },
+      relationship: {
+        playerName: "Alice", npcName: "Mara", reason: "Alice returned Mara's stolen compass.",
+        immediate: "helped", onSuccess: "none", onFailure: "none",
+      },
+      suggestedActions: [],
+    });
+    expect(result.relationship?.immediate).toBe("helped");
+    const stripped = DmMoveSchema.parse({
+      ...result,
+      relationship: { ...result.relationship, immediate: "helped", trustDelta: 99 },
+    });
+    expect(stripped.relationship).not.toHaveProperty("trustDelta");
   });
 });

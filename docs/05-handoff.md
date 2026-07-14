@@ -21,10 +21,29 @@ results, combat, and system events.
 The game supports multiple browser clients on one authoritative, sequential WebSocket room. It is
 not yet the Phase 3 lobby/activity system: there is one shared location, one global DM lock, public
 dialogue/audio, name-only reconnect identity, and no host authorization or private conversations.
+The saved party roster now has separate transient online/activity presence, so every tab can see
+who is Ready, Acting, Speaking, Asking DM, Rolling, Following, or Offline. This does not make actions
+parallel: the first accepted action still owns the shared Storyteller beat until it resolves.
+
+### How the current co-op room plays
+
+- Outside combat there is no round-robin turn order. Any joined player may submit when `dmBusy` is
+  false; the first accepted intent resolves completely before another can begin.
+- Every tab receives the same authoritative scene, log, quests, streamed narration, NPC dialogue,
+  images, dice results, and table voice. Actor-relative narration calls the acting hero "you", but
+  that same rendered text/audio is currently broadcast to everyone.
+- A pending check pauses the room and only the named hero may roll.
+- Main and side quests are currently party-shared. Personal side quests, private conversations,
+  per-player locations, and non-conflicting parallel activities remain the next multiplayer slice
+  described in `docs/06-open-world-multiplayer.md`.
 
 ## Implemented features
 
 - React/Vite/Tailwind client with reconnect-safe identity in browser local storage.
+- Pre-character journey gate with New Journey, Load Saved Journey, and a multiplayer-safe Join
+  Current Journey path. New/load operations are table-wide, confirmed in the UI, and acknowledged
+  by the server before character creation opens. An unjoined socket may replace only a pristine
+  table; once a journey is active, a joined party member must use Settings.
 - `CharacterCreator.tsx`: compact Race → Class → Abilities → Details → Equipment → Review tabs.
 - All twelve SRD classes and nine races, SRD lineages, three ability methods, class/racial/background
   skills, languages, traits, level-1 features/default spells, legal equipment packages, and derived
@@ -36,6 +55,9 @@ dialogue/audio, name-only reconnect identity, and no host authorization or priva
 - Plain-language narration uses short direct sentences, few modifiers, and no decorative metaphors.
 - Clickable party badges and a character-sheet dock for every party member. Map, Quests, and
   Settings use the same non-modal dock while the action composer remains usable.
+- Live party presence is a transient WebSocket feed rather than save data. A new hero joining enters
+  the shared system log; reconnect/offline churn does not pollute saves. Multiple tabs attached to
+  one hero count as one online player.
 - Constrained two-pass AI DM: structured move selection, then streamed narration.
 - Deterministic rules engine for dice, skill checks, damage, and healing; ability checks correctly
   do not auto-succeed/fail on natural 20/1. The model chooses a named difficulty category and code
@@ -56,6 +78,18 @@ dialogue/audio, name-only reconnect identity, and no host authorization or priva
 - Named NPCs receive a campaign-persistent Kokoro voice distinct from the narrator. Sex and
   personality choose a stable voice and bounded delivery rate; social-check reactions retain both.
   American and British pronunciation pipelines share one model, so this does not add VRAM residency.
+- Settings has a shared Standard/Mature content mode. Standard is the default. The toggling player
+  is warned to obtain table agreement; no vote or host enforcement exists yet. Mature only permits
+  player-requested dark humor, brief fictional gore, and slowly earned adult consensual romance;
+  intimacy fades to black. Explicit sexual description,
+  minors, coercion, sexual violence, and eroticized captivity remain excluded. New Game resets the
+  content mode to Standard; a same-party New Campaign preserves it and saves restore it.
+- NPC relationships persist per hero as trust, affection, status, and a short established note.
+  The model selects a fixed event, never numbers; server reducers apply/clamp values. Check-dependent
+  changes wait for the real dice result; unresolved success/failure branches are persisted for crash
+  recovery but redacted from every client snapshot. Mutual romance requires Mature mode, an adult/elder hero,
+  an NPC explicitly marked adult, an existing bond, a person (not creature), and mutual interest.
+  Current relationship state appears under visible NPCs and in that hero's Sheet drawer.
 - Structured quest start/advance/complete/fail events, one opening main quest fallback, and a Quest
   Journal with active/completed/failed presentation.
 - Inventory sheet cards group duplicates and use code-native category icons without binary assets.
@@ -168,8 +202,12 @@ creature asset under `var/assets/img/` without touching the active campaign.
 
 Current manual regression checklist:
 
+- With browser identity cleared, confirm the journey chooser appears before character creation.
+  Test New Journey, Load Saved Journey, Back To Journeys, and Join Current Journey from a second
+  isolated browser without resetting the active table.
 - Visit every creator tab, randomize a character, review the level-1 sheet, join, see `?`, then see
-  the generated portrait.
+  the generated portrait. On a short viewport, confirm Details scrolls from the heading through all
+  background skills and languages to the navigation buttons.
 - Open your own and another party member's sheet, then type and submit with the dock still open.
   Repeat with Map, Quests, and Settings; on mobile, scroll the dock without covering the composer.
 - Switch narrator sex and verify the next sentence uses the selected voice.
@@ -177,6 +215,15 @@ Current manual regression checklist:
 - In Settings, independently mute and adjust music/effects; confirm the quieter mix sits behind
   narration and the Now Playing label matches the scene, time, and weather; wait for or temporarily shorten the movement interval and confirm a
   same-scene variation; verify choices, rolls, combat, and boss arrangements.
+- In Settings, switch from Standard to Mature and confirm the shared-table warning. In a second
+  isolated browser profile, confirm the same setting arrives; New Game must reset it to Standard.
+- Speak with the same named adult NPC over several meaningful helpful/personal beats. Confirm only
+  the acting hero's Sheet gains relationship entries and the visible NPC card shows the status.
+- Ask to capture an alert resisting enemy. Confirm the Storyteller permits the attempt but pauses
+  for an appropriate real check; failure must change the situation instead of blocking the quest.
+- With Mature enabled, explicitly request dark humor or a gory fictional beat and confirm it stays
+  brief. Romance must grow gradually and mutually; intimacy must fade to black. Standard mode must
+  not introduce those mature beats.
 - Use Speak with two different NPCs, then revisit the first; verify direct replies, distinct voices,
   stable voice/rate reuse, `?` → close-up portrait, and style-specific portrait reuse. Repeat with one
   named creature. Storyteller narration must never receive an avatar.
@@ -185,7 +232,10 @@ Current manual regression checklist:
 - Confirm freshly painted scenes contain no people, faces, animals, or monsters, including an old
   save whose stored image prompt mentioned a figure. Open Map and exercise every current exit.
 - Multiplayer: use two isolated browser profiles, join two different heroes, verify both converge
-  on the same party/scene, only the named hero can roll, and one tab closing leaves the other alive.
+  on the same party/scene, both see new-character join events, and party badges show Acting versus
+  Following in both tabs. Confirm Offline/Online transitions do not add story-log entries, only the
+  named hero can roll, and one tab closing leaves the other alive. Open two tabs for one hero and
+  confirm closing only one does not mark that hero Offline.
 - Open Quests and verify the opening main quest; inspect duplicate inventory item grouping/icons.
 - Create a named save, start a new game, load the save, and verify hero/story/voice restoration.
 - Close the final browser during narration; verify audio stops and reopening restores state.
@@ -205,9 +255,16 @@ These behaviors were tuned after real play sessions and must be preserved:
   with a verb that says exactly what to do; summary = one plain sentence of why. Enforced in the
   move-instruction prompt and mirrored by the hardcoded opening-quest fallback ("The First Clue").
   Abstract phrasing like "investigate the immediate hook" is explicitly banned.
-- **Rolls are the heartbeat.** The move-selection prompt biases toward `request_check` for any
-  real attempt (including crossing thresholds like portals); check outcomes are allowed to bend
-  the story. Only conversation, obvious facts, automatic tasks, and impossible attempts skip rolls.
+- **Rolls are for gambles, exploration is free (rebalanced 2026-07-14 after playtests).**
+  A check needs real opposition/danger/time pressure AND an interesting failure. Looking,
+  listening, reading, examining pointed-at objects, and searching safe places never roll; clues
+  needed for story progress are given freely. No re-rolling the same failed attempt. Check
+  outcomes may bend the story.
+- **Openings are seeded.** `onNewCampaign` rolls a random place/threat/hidden-twist seed
+  (SEED_PLACES/THREATS/TWISTS in game.ts) unless players give a premise, and bans the model's
+  pet cliches (whispers, market stalls, hooded strangers). Player-voiced feature wishes live in
+  `docs/11-ideas-backlog.md` (click-to-talk private dialogues, clickable scene items, autosaves,
+  per-player async progression).
 - **Stale narration is skipped.** A new player action or roll click calls `cancelAudio(true)`:
   in-flight TTS aborts, queued sentences drop, clients get `audio_stop`, and the narrator starts
   fresh with the new beat. Players who read faster than the narrator never wait for old audio.
@@ -234,4 +291,6 @@ selectors for remaining level-1 class/spell choices, the broader SRD data import
 pregeneration, an optional authored music library, a persistent region graph, and 3D dice.
 Full SRD advancement and encounter mechanics are specified in `docs/08-progression-and-content.md`;
 the current narrator must never grant levels, ASIs, class features, or item mechanics through prose.
+The current capture flow uses the deterministic ability-check engine; full SRD initiative, attacks,
+grapple/shove, conditions, escape, and restraint remain Phase 4 and must not be described as implemented.
 Do not confuse these planned features with defects in the current vertical slice.
