@@ -2,11 +2,16 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { WebSocketServer } from "ws";
-import { ClientMessageSchema, PortraitRequestSchema } from "@grimoire/shared";
+import {
+  ClientMessageSchema, HERO_EXPORT_FORMAT, JOURNEY_EXPORT_FORMAT, JourneyExportSchema,
+  PortraitRequestSchema, type PublicState,
+} from "@grimoire/shared";
 import { ASSET_DIR, CONFIG } from "./config.js";
 import { GameRoom } from "./game.js";
 import { warmUp } from "./ollama.js";
 import { comfyAvailable, generatePortrait } from "./media.js";
+import { loadSlot, saveSlot } from "./db.js";
+import type { ChatMessage } from "./ollama.js";
 
 const MIME: Record<string, string> = {
   ".png": "image/png", ".jpg": "image/jpeg", ".wav": "audio/wav",
@@ -58,6 +63,80 @@ const server = http.createServer((req, res) => {
         console.error("[portrait]", (err as Error).message);
         res.writeHead(500, { "content-type": "application/json", ...cors });
         res.end(JSON.stringify({ error: "portrait generation failed" }));
+      }
+    });
+    return;
+  }
+  if (url === "/export/journey" || url.startsWith("/export/journey/")) {
+    // download the live journey, or a saved slot: /export/journey/<saveId>
+    const idPart = url.split("/")[3];
+    let name: string, snapshot: { state: PublicState; history: unknown } | null;
+    if (idPart) {
+      const id = Number(idPart);
+      const loaded = Number.isInteger(id) ? loadSlot(id) : null;
+      if (!loaded) { res.writeHead(404); res.end("No such saved journey."); return; }
+      snapshot = loaded;
+      name = loaded.state.campaignName || "journey";
+    } else {
+      snapshot = room.getExportSnapshot();
+      name = snapshot.state.campaignName || "journey";
+    }
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "journey";
+    res.writeHead(200, {
+      "content-type": "application/json",
+      "access-control-allow-origin": "*",
+      "content-disposition": `attachment; filename="grimoire-journey-${slug}.json"`,
+    });
+    res.end(JSON.stringify({
+      format: JOURNEY_EXPORT_FORMAT,
+      exportedAt: new Date().toISOString(),
+      name,
+      state: snapshot.state,
+      history: snapshot.history,
+    }, null, 1));
+    return;
+  }
+  if (url.startsWith("/export/hero/")) {
+    // download one hero from the live party: /export/hero/<characterId>
+    const id = decodeURIComponent(url.slice("/export/hero/".length));
+    const character = room.getExportSnapshot().state.party.find(c => c.id === id);
+    if (!character) { res.writeHead(404); res.end("No such hero at this table."); return; }
+    const slug = character.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 30) || "hero";
+    res.writeHead(200, {
+      "content-type": "application/json",
+      "access-control-allow-origin": "*",
+      "content-disposition": `attachment; filename="grimoire-hero-${slug}.json"`,
+    });
+    res.end(JSON.stringify({
+      format: HERO_EXPORT_FORMAT,
+      exportedAt: new Date().toISOString(),
+      character,
+    }, null, 1));
+    return;
+  }
+  if (url === "/import/journey") {
+    // upload a previously exported journey; it lands as a new save slot to load from the chooser
+    const cors = {
+      "access-control-allow-origin": "*",
+      "access-control-allow-methods": "POST, OPTIONS",
+      "access-control-allow-headers": "content-type",
+    };
+    if (req.method === "OPTIONS") { res.writeHead(204, cors); res.end(); return; }
+    if (req.method !== "POST") { res.writeHead(405, cors); res.end(); return; }
+    let body = "";
+    req.on("data", chunk => { body += chunk; if (body.length > 5_000_000) req.destroy(); });
+    req.on("end", () => {
+      try {
+        const journey = JourneyExportSchema.parse(JSON.parse(body));
+        const slotName = `Imported - ${journey.name}`.slice(0, 40);
+        saveSlot(slotName, journey.state as unknown as PublicState, journey.history as ChatMessage[]);
+        room.notifySavesChanged();
+        res.writeHead(200, { "content-type": "application/json", ...cors });
+        res.end(JSON.stringify({ ok: true, name: slotName }));
+      } catch (err) {
+        console.error("[import journey]", (err as Error).message);
+        res.writeHead(400, { "content-type": "application/json", ...cors });
+        res.end(JSON.stringify({ error: "That file is not a valid Grimoire journey." }));
       }
     });
     return;

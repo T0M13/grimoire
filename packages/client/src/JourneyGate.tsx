@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { PublicState, SaveMeta } from "@grimoire/shared";
+import { assetUrl } from "./useGame";
 
 export interface PendingJourney {
   action: "new" | "load";
@@ -7,7 +8,7 @@ export interface PendingJourney {
 }
 
 export default function JourneyGate({
-  state, connected, pending, error, onJoinCurrent, onNewJourney, onLoadJourney,
+  state, connected, pending, error, onJoinCurrent, onNewJourney, onLoadJourney, onDeleteJourney,
 }: {
   state: PublicState;
   connected: boolean;
@@ -16,8 +17,32 @@ export default function JourneyGate({
   onJoinCurrent: () => void;
   onNewJourney: () => void;
   onLoadJourney: (save: SaveMeta) => void;
+  onDeleteJourney: (save: SaveMeta) => void;
 }) {
   const [showSaves, setShowSaves] = useState(false);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
+  const importInput = useRef<HTMLInputElement>(null);
+
+  const importJourney = async (file: File) => {
+    setImportStatus("Importing...");
+    try {
+      const text = await file.text();
+      JSON.parse(text); // fail fast on non-JSON before bothering the server
+      const res = await fetch(assetUrl("/import/journey"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: text,
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error ?? "import failed");
+      setImportStatus(`Imported "${result.name}" - find it under Load Saved Journey.`);
+      setShowSaves(true);
+    } catch (err) {
+      setImportStatus(err instanceof Error && err.message.includes("valid Grimoire")
+        ? err.message
+        : "That file is not a valid Grimoire journey.");
+    }
+  };
   const hasCurrentJourney = state.party.length > 0 || state.scene.kind !== "fireside" || state.log.length > 0;
   const busy = pending !== null || !connected;
 
@@ -74,7 +99,7 @@ export default function JourneyGate({
             <div className="mb-2 px-1 text-[10px] uppercase tracking-[0.2em] text-stone-500">Saved Journeys</div>
             <ul className="space-y-2">
               {state.saves.map(save => (
-                <li key={save.id} className="flex items-center gap-3 rounded-xl border border-stone-800 bg-stone-900/60 px-3 py-2.5">
+                <li key={save.id} className="flex items-center gap-2 rounded-xl border border-stone-800 bg-stone-900/60 px-3 py-2.5">
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm text-stone-200">{save.name}</div>
                     <div className="mt-0.5 text-[10px] text-stone-600">{save.savedAt}</div>
@@ -83,6 +108,15 @@ export default function JourneyGate({
                     className="rounded-lg border border-stone-700 px-3 py-1.5 text-xs text-stone-300 hover:border-amber-500/60 disabled:opacity-40">
                     Load
                   </button>
+                  <a href={assetUrl(`/export/journey/${save.id}`)} download
+                    className="rounded-lg border border-stone-800 px-2.5 py-1.5 text-xs text-stone-400 hover:border-amber-500/60 hover:text-amber-200">
+                    Download
+                  </a>
+                  <button type="button" disabled={busy}
+                    onClick={() => { if (confirm(`Delete journey "${save.name}"? This cannot be undone (download it first if unsure).`)) onDeleteJourney(save); }}
+                    className="rounded-lg border border-stone-800 px-2.5 py-1.5 text-xs text-stone-500 hover:border-red-500/60 hover:text-red-300 disabled:opacity-40">
+                    Delete
+                  </button>
                 </li>
               ))}
             </ul>
@@ -90,7 +124,17 @@ export default function JourneyGate({
           </section>
         )}
 
-        <div className="mt-5 min-h-5 text-center text-sm">
+        <div className="mt-3 flex items-center justify-center gap-3">
+          <input ref={importInput} type="file" accept="application/json,.json" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) void importJourney(f); e.target.value = ""; }} />
+          <button type="button" disabled={busy} onClick={() => importInput.current?.click()}
+            className="rounded-lg border border-stone-800 px-3 py-1.5 text-xs text-stone-400 transition hover:border-amber-500/60 hover:text-amber-200 disabled:opacity-40">
+            Import A Journey File
+          </button>
+        </div>
+        {importStatus && <p className="mt-2 text-center text-xs text-stone-400">{importStatus}</p>}
+
+        <div className="mt-3 min-h-5 text-center text-sm">
           {pending && <span className="ember text-stone-400">Preparing The Journey<span>.</span><span>.</span><span>.</span></span>}
           {!pending && !connected && <span className="ember text-stone-500">Reaching The Storyteller<span>.</span><span>.</span><span>.</span></span>}
           {!pending && connected && error && <span className="text-red-300/90">{error}</span>}

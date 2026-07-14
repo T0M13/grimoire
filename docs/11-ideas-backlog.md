@@ -43,6 +43,24 @@ scopes are already partially designed there).
   combat capture needs initiative, attacks, grapple/shove, conditions, escape, and restraint in the
   Phase 4 encounter engine; do not fake those mechanics in narration.
 
+## Voice-to-text: talk to the table (2026-07-14)
+
+- Players speak instead of typing: local speech-to-text (whisper.cpp or the browser's own
+  SpeechRecognition) turns the mic into the action input, the narrator answers out loud —
+  a full spoken conversation with the AI DM, everyone at the table talking.
+- Push-to-talk button next to the input; transcript still shown and editable before sending.
+- Keep it local like everything else; whisper-small runs fine beside the other models.
+
+## Permadeath and the death kick (2026-07-14)
+
+- When the Phase 4 combat engine can reduce a hero to 0 HP and death saves fail, **death is
+  final**: the character is marked dead, leaves the party, and that player is returned to
+  character creation to make a new hero (the "kick"). The dead hero stays in the journey's
+  history; their body and belongings exist in the world.
+- Until engine-driven damage exists, the DM prompt already enforces the fiction side:
+  dead is dead (no resurrection or reappearing), attacks are never instant kills, and player
+  characters cannot be killed by narration alone.
+
 ## Per-player async progression ("play on while others are offline")
 
 - Every player owns their hero (real seat identity/token, not just a name claim).

@@ -122,6 +122,24 @@ The WebSocket protocol is the public API (`docs/09-api.md`). `tools/api/autoplay
 health check and as the harness for AI-driven playtesting. A 1-minute reference run produced
 15 beats, 6 rolls, and 4 scene changes with no stalls.
 
+## Portable heroes and journeys (2026-07-14)
+
+- HTTP: `GET /export/journey` (live table), `GET /export/journey/<saveId>` (slot),
+  `GET /export/hero/<characterId>` — JSON downloads (`grimoire-journey@1` / `grimoire-hero@1`,
+  schemas in shared). `POST /import/journey` stores an uploaded journey as a new save slot
+  ("Imported - <name>") and refreshes every client's chooser.
+- WS: `join_hero` joins with an exported hero file. Same id/name in the party -> that hero
+  simply continues; unknown hero -> enters this world with level/stats/inventory intact
+  (portrait repainted locally; foreign portrait URLs are dropped). **Dead heroes (hp <= 0) are
+  rejected: "Dead is dead - create a new hero."**
+- UI: JourneyGate rows have Load / Download / Delete + an "Import A Journey File" button;
+  the character screen has "Import A Hero File"; Settings has "Download This Journey / My Hero".
+- Presence: a transient `writing` activity shows "Writing..." on party badges while someone
+  types (`presence_hint` message; never clobbers real in-flight activities, never persisted).
+- World-consistency prompt contract: actions always get grounded reactions (even crude ones),
+  attacks are never instant kills, dead is dead, no time travel/teleport/modern references,
+  and no scene changes unless players moved.
+
 ## Fresh-clone setup
 
 Windows hosts run `./start.ps1`. It invokes the idempotent `setup.ps1` before launching anything.

@@ -367,8 +367,40 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("load_slot"), id: z.number().int() }),
   z.object({ type: z.literal("delete_slot"), id: z.number().int() }),
   z.object({ type: z.literal("new_game") }),
+  /** Join with a previously exported hero file (level, stats, inventory travel along). */
+  z.object({ type: z.literal("join_hero"), character: CharacterSchema }),
+  /** Transient "someone is writing" hint for the presence roster; never persisted. */
+  z.object({ type: z.literal("presence_hint"), writing: z.boolean() }),
 ]);
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
+
+// ---------- Export / import file formats (downloadable heroes and journeys) ----------
+
+export const HERO_EXPORT_FORMAT = "grimoire-hero@1" as const;
+export const JOURNEY_EXPORT_FORMAT = "grimoire-journey@1" as const;
+
+export const HeroExportSchema = z.object({
+  format: z.literal(HERO_EXPORT_FORMAT),
+  exportedAt: z.string().optional(),
+  character: CharacterSchema,
+});
+export type HeroExport = z.infer<typeof HeroExportSchema>;
+
+/** Journeys carry the whole world: story state, scene, NPCs, quests, characters, DM memory. */
+export const JourneyExportSchema = z.object({
+  format: z.literal(JOURNEY_EXPORT_FORMAT),
+  exportedAt: z.string().optional(),
+  name: z.string().min(1).max(80),
+  state: z.object({
+    scene: z.object({}).passthrough(),
+    party: z.array(z.object({}).passthrough()),
+  }).passthrough(),
+  history: z.array(z.object({
+    role: z.enum(["system", "user", "assistant"]),
+    content: z.string(),
+  })).max(1000),
+});
+export type JourneyExport = z.infer<typeof JourneyExportSchema>;
 
 /** POST /portrait request body (custom avatar generation) */
 export const PortraitRequestSchema = z.object({
@@ -408,6 +440,7 @@ export interface NarrationSpeaker {
 /** Transient room presence. It is broadcast live and never stored in campaign saves. */
 export type PartyActivity =
   | "ready"
+  | "writing"
   | "acting"
   | "speaking"
   | "asking_dm"

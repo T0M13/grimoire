@@ -121,6 +121,42 @@ export function sanitizePlayerFacingText(text: string): string {
   return stripMarkdownSymbols(safePrefix(text));
 }
 
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * NPC narration already carries authoritative speaker metadata. Small models sometimes repeat that
+ * same speaker as a prose label ("Guard Edwin: ..."), which made the UI and TTS say the name twice.
+ * Probe the short leading buffer until it is clear whether a label is present, then remove only an
+ * exact name-plus-separator prefix. Natural sentences that merely begin similarly are preserved.
+ */
+function leadingSpeakerProbe(text: string, speakerName: string): { ready: boolean; text: string } {
+  const name = speakerName.trim();
+  if (!name) return { ready: true, text };
+  const wrappers = "[*_#`]+";
+  const quotes = "[\"'“”‘’]";
+  const label = new RegExp(
+    `^\\s*(?:${quotes}\\s*)?(?:${wrappers}\\s*)*${escapeRegExp(name)}`
+      + `\\s*(?:${wrappers}\\s*)*(?::|[-–—])\\s*(?:${wrappers}\\s*)*(?:${quotes}\\s*)?`,
+    "iu",
+  );
+  const match = label.exec(text);
+  if (match) return { ready: true, text: text.slice(match[0].length) };
+
+  const comparable = text
+    .replace(/^\s*(?:["'“”‘’]\s*)?(?:[*_#`]+\s*)*/u, "")
+    .toLocaleLowerCase();
+  const expected = name.toLocaleLowerCase();
+  if (comparable.length <= expected.length && expected.startsWith(comparable))
+    return { ready: false, text };
+  if (comparable.startsWith(expected)) {
+    const tail = comparable.slice(expected.length);
+    if (/^\s*(?:[*_#`]+\s*)*$/u.test(tail)) return { ready: false, text };
+  }
+  return { ready: true, text };
+}
+
 /**
  * Streaming equivalent of sanitizePlayerFacingText. It holds only a short tail so a label split
  * across model chunks is caught before any part of it reaches the UI, log, or TTS queue.
@@ -129,11 +165,28 @@ export class PlayerFacingTextStream {
   private pending = "";
   private complete = "";
   private stopped = false;
+  private speakerPending = "";
+  private speakerResolved: boolean;
 
-  constructor(private readonly emit: (text: string) => void) {}
+  constructor(private readonly emit: (text: string) => void, private readonly speakerName?: string) {
+    this.speakerResolved = !speakerName?.trim();
+  }
 
   push(chunk: string): void {
     if (this.stopped || !chunk) return;
+    if (!this.speakerResolved && this.speakerName) {
+      this.speakerPending += chunk;
+      const probe = leadingSpeakerProbe(this.speakerPending, this.speakerName);
+      if (!probe.ready) return;
+      this.speakerPending = "";
+      this.speakerResolved = true;
+      chunk = probe.text;
+      if (!chunk) return;
+    }
+    this.pushSanitized(chunk);
+  }
+
+  private pushSanitized(chunk: string): void {
     this.pending += chunk;
     const context = this.complete.slice(-64);
     const marker = internalMarkerIndex(context + this.pending, context.length);
@@ -154,6 +207,13 @@ export class PlayerFacingTextStream {
   }
 
   flush(): string {
+    if (!this.speakerResolved && this.speakerName) {
+      const buffered = this.speakerPending;
+      this.speakerPending = "";
+      this.speakerResolved = true;
+      const probe = leadingSpeakerProbe(buffered, this.speakerName);
+      this.pushSanitized(probe.ready ? probe.text : buffered);
+    }
     if (!this.stopped) {
       const heldAt = possibleMarkerSuffix(this.pending, canStartLabelAfter(this.complete));
       this.publish(heldAt >= 0 ? this.pending.slice(0, heldAt) : safePrefix(this.pending));
@@ -200,6 +260,11 @@ export const MOVE_INSTRUCTION = `ENGINE: Choose your next DM move for the situat
   find, no roll. If a player needs a piece of information for the story to move, GIVE it to them.
   Never ask to re-roll the same failed attempt; the failure already changed the situation.
   Fill "check" with a difficulty category; never calculate or output a numerical DC.
+- VIOLENCE IS A GAMBLE: attacking, killing, restraining, kidnapping, robbing, or otherwise
+  overcoming an active resisting target normally requires "request_check". Never declare a hit,
+  capture, serious wound, or death before that roll. Skip the roll only when the attempt is plainly
+  impossible, the target is already helpless, or the target freely allows it; narrate that truth
+  without pretending an uncertain contest was settled automatically.
 - ENTERTAIN CREATIVE PLANS, including odd, funny, criminal, or dark plans, when they are physically
   possible. Do not refuse merely because a plan is unusual or morally dubious. The world reacts.
   An actually impossible attempt fails plainly without a roll; do not pretend dice can break reality.
@@ -269,9 +334,13 @@ export async function decideMove(state: PublicState, history: ChatMessage[], pla
 
 export function semanticallyValid(move: DmMove, state: PublicState, playerAction: string): boolean {
   const partyNames = new Set(state.party.map(c => c.name.toLowerCase()));
+  const interactionMode = /INTERACTION MODE:\s*(ACT|SPEAK)/i.exec(playerAction)?.[1]?.toLowerCase();
   if (move.npc && !npcMetadataValid(move.npc, state, partyNames)) return false;
   if (move.scene?.occupants.some(subject => !npcMetadataValid(subject, state, partyNames))) return false;
   if (playerAction.includes("INTERACTION MODE: SPEAK") && !move.npc) return false;
+  if (move.move === "change_scene" && interactionMode === "speak") return false;
+  if (move.move === "change_scene" && interactionMode === "act" && !playerActionRequestsMovement(playerAction))
+    return false;
   if (move.relationship) {
     const playerKnown = partyNames.has(move.relationship.playerName.toLowerCase());
     const targetKey = npcKeyForValidation(move.relationship.npcName);
@@ -292,6 +361,16 @@ export function semanticallyValid(move: DmMove, state: PublicState, playerAction
   if (move.move === "give_item")
     return !!move.item && partyNames.has(move.item.playerName.toLowerCase());
   return true;
+}
+
+/** Only explicit player travel may replace the current scene during a normal Act turn. */
+export function playerActionRequestsMovement(playerAction: string): boolean {
+  const action = playerAction
+    .split(/\n\s*INTERACTION MODE:/i, 1)[0]!
+    .replace(/^[^:\n]{1,40}:\s*/, "")
+    .trim();
+  return /^(?:(?:i|we)\s+)?(?:(?:try|decide|want|start|begin)\s+to\s+)?(?:go|head|walk|run|travel|enter|leave|exit|follow|descend|climb|flee|step|move|cross|return)\b/i.test(action)
+    || /\b(?:i|we)\s+(?:(?:try|decide|want|start|begin)\s+to\s+)?(?:go|head|walk|run|travel|enter|leave|exit|follow|descend|climb|flee|step|move|cross|return)\b/i.test(action);
 }
 
 function npcKeyForValidation(name: string): string {
@@ -318,8 +397,9 @@ export async function narrate(
   instruction: string,
   onChunk: (text: string) => void,
   viewpointName?: string,
+  speakerName?: string,
 ): Promise<string> {
-  const visible = new PlayerFacingTextStream(onChunk);
+  const visible = new PlayerFacingTextStream(onChunk, speakerName);
   await generateStream(buildMessages(state, history, instruction, viewpointName), chunk => visible.push(chunk));
   return visible.flush();
 }

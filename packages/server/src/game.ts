@@ -12,7 +12,7 @@ import {
   validateCharacterChoices, type CharacterBuildChoices, type Rng,
 } from "@grimoire/rules";
 import { decideMove, narrate, sanitizePlayerFacingText } from "./dm.js";
-import { generatePortrait, getNpcPortrait, getSceneImage, sceneSignature, SentenceStream, synthesize } from "./media.js";
+import { assetImageExists, generatePortrait, getNpcPortrait, getSceneImage, sceneSignature, SentenceStream, synthesize } from "./media.js";
 import { deleteSlot, listSaves, loadCampaign, loadSlot, logEvent, saveCampaign, saveSlot } from "./db.js";
 import type { ChatMessage } from "./ollama.js";
 import { IdleShutdown } from "./lifecycle.js";
@@ -378,7 +378,79 @@ export class GameRoom {
         this.broadcastState();
         return;
       case "new_game": return this.onNewGame(ws);
+      case "join_hero": return this.onJoinHero(ws, msg.character);
+      case "presence_hint": {
+        const player = this.clients.get(ws);
+        if (!player) return;
+        const key = npcKey(player);
+        const currentActivity = this.activities.get(key)?.activity;
+        // only toggle between idle-ish states; never clobber a real in-flight activity
+        if (msg.writing && (currentActivity === undefined || currentActivity === "ready"))
+          this.setActivity(player, "writing");
+        else if (!msg.writing && currentActivity === "writing")
+          this.clearActivity(player);
+        else return;
+        this.broadcastPresence();
+        return;
+      }
     }
+  }
+
+  /** Join with an exported hero file: same hero id/name continues, a new hero enters this world. */
+  private onJoinHero(ws: WebSocket, imported: Character): void {
+    const name = imported.name.trim();
+    if (!name) return this.send(ws, { type: "error", message: "That hero file has no name." });
+    const existing = this.state.party.find(
+      c => c.id === imported.id || npcKey(c.name) === npcKey(name),
+    );
+    if (existing) {
+      // the same hero returns to this journey and simply continues
+      this.clients.set(ws, existing.name);
+    } else {
+      if (imported.hp <= 0)
+        return this.send(ws, { type: "error", message: "This hero is dead. Dead is dead - create a new hero." });
+      const character: Character = structuredClone({
+        ...imported,
+        name,
+        hp: Math.min(imported.hp, imported.maxHp),
+        // portraits from another host do not exist here; repaint in the background
+        portraitUrl: assetImageExists(imported.portraitUrl) ? imported.portraitUrl : null,
+      });
+      this.state.party.push(character);
+      this.pushLog("system", `${name} the ${character.className} arrives from another tale.`, "system");
+      if (!character.portraitUrl) this.paintHeroPortrait(character);
+      this.clients.set(ws, name);
+    }
+    this.persist();
+    this.broadcastState();
+    this.broadcastPresence();
+  }
+
+  private paintHeroPortrait(character: Character): void {
+    generatePortrait({
+      sex: character.sex, age: character.age,
+      className: character.className, description: character.bio,
+    })
+      .then(url => {
+        const c = this.state.party.find(p => p.id === character.id);
+        if (c) {
+          c.portraitUrl = url;
+          this.persist();
+          this.broadcastState();
+        }
+      })
+      .catch(err => console.warn("[portrait failed]", (err as Error).message));
+  }
+
+  /** Snapshot for journey export downloads. */
+  getExportSnapshot(): { state: PublicState; history: ChatMessage[] } {
+    return { state: this.state, history: this.history };
+  }
+
+  /** Called after an out-of-band save-slot change (e.g. HTTP journey import). */
+  notifySavesChanged(): void {
+    this.state.saves = listSaves();
+    this.broadcastState();
   }
 
   private onLoadSlot(ws: WebSocket, id: number): void {
@@ -472,21 +544,7 @@ export class GameRoom {
       this.state.party.push(character);
       this.pushLog("system", `${name} the ${character.className} joined the party.`, "system");
       // paint their portrait in the background - the game never waits for it
-      if (!character.portraitUrl) {
-        generatePortrait({
-          sex: character.sex, age: character.age,
-          className: character.className, description: character.bio,
-        })
-          .then(url => {
-            const c = this.state.party.find(p => p.id === character.id);
-            if (c) {
-              c.portraitUrl = url;
-              this.persist();
-              this.broadcastState();
-            }
-          })
-          .catch(err => console.warn("[portrait failed]", (err as Error).message));
-      }
+      if (!character.portraitUrl) this.paintHeroPortrait(character);
     }
     this.clients.set(ws, name);
     this.persist();

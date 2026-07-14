@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import {
   BACKGROUND_BUILD_RULES, CLASS_BUILD_RULES, LANGUAGES, POINT_BUY_BUDGET, POINT_BUY_COST,
   RACE_BUILD_RULES, STANDARD_ARRAY, applyRacialBonuses, backgroundRulesById,
@@ -6,8 +6,8 @@ import {
   type CharacterBuildChoices,
 } from "@grimoire/rules";
 import {
-  ABILITIES, ALIGNMENTS, SKILLS,
-  type Ability, type AbilityMethod, type AbilityScores, type Alignment, type Skill,
+  ABILITIES, ALIGNMENTS, HeroExportSchema, SKILLS,
+  type Ability, type AbilityMethod, type AbilityScores, type Alignment, type Character, type Skill,
 } from "@grimoire/shared";
 
 export interface JoinPayload {
@@ -84,12 +84,25 @@ function skillDefaults(raceId: string, classId: string, backgroundId: string) {
 }
 
 export default function CharacterCreator({
-  onJoin, connected, onBack,
+  onJoin, onImportHero, connected, onBack,
 }: {
   onJoin: (payload: JoinPayload) => void;
+  onImportHero?: (character: Character) => void;
   connected: boolean;
   onBack?: () => void;
 }) {
+  const heroFileInput = useRef<HTMLInputElement>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  const importHeroFile = async (file: File) => {
+    setImportError(null);
+    try {
+      const parsed = HeroExportSchema.parse(JSON.parse(await file.text()));
+      onImportHero?.(parsed.character);
+    } catch {
+      setImportError("That file is not a valid Grimoire hero.");
+    }
+  };
   const defaults = skillDefaults("human", "fighter", "acolyte");
   const [tab, setTab] = useState(0);
   const [sex, setSex] = useState<"male" | "female">("male");
@@ -227,10 +240,23 @@ export default function CharacterCreator({
         alignment, personalityTraits, ideal, bond, flaw, languages, equipmentPackageId,
       });
     }}>
-      {onBack && <button type="button" onClick={onBack}
-        className="mb-3 rounded-lg border border-stone-800 px-3 py-1.5 text-xs text-stone-500 hover:border-stone-600 hover:text-stone-300">
-        Back To Journeys
-      </button>}
+      <div className="mb-3 flex items-center gap-2">
+        {onBack && <button type="button" onClick={onBack}
+          className="rounded-lg border border-stone-800 px-3 py-1.5 text-xs text-stone-500 hover:border-stone-600 hover:text-stone-300">
+          Back To Journeys
+        </button>}
+        {onImportHero && (
+          <>
+            <input ref={heroFileInput} type="file" accept="application/json,.json" className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) void importHeroFile(f); e.target.value = ""; }} />
+            <button type="button" disabled={!connected} onClick={() => heroFileInput.current?.click()}
+              className="rounded-lg border border-stone-800 px-3 py-1.5 text-xs text-stone-500 hover:border-amber-500/60 hover:text-amber-200 disabled:opacity-40">
+              Import A Hero File
+            </button>
+          </>
+        )}
+        {importError && <span className="text-xs text-red-300/90">{importError}</span>}
+      </div>
       <h1 className="narration text-5xl text-amber-100/90 tracking-wide text-center mb-1">Grimoire</h1>
       <p className="text-sm text-stone-400 text-center mb-4">Create A Level 1 Hero · 2014 SRD Rules</p>
       <button type="button" onClick={randomizeEverything} className="w-full rounded-xl border border-stone-700 text-stone-300 hover:border-amber-600/60 hover:text-amber-200 py-2 text-sm transition mb-4">Randomize Everything</button>

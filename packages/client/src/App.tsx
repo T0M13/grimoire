@@ -13,7 +13,7 @@ import { assetUrl, useGame } from "./useGame";
 import { useSoundscape, type SoundscapeControls } from "./useSoundscape";
 import CharacterCreator from "./CharacterCreator";
 import JourneyGate, { type PendingJourney } from "./JourneyGate";
-import { readPlayerIdentity } from "./playerIdentity";
+import { readPlayerIdentity, writePlayerIdentity } from "./playerIdentity";
 
 const mod = (score: number) => Math.floor((score - 10) / 2);
 const fmtMod = (m: number) => (m >= 0 ? `+${m}` : `${m}`);
@@ -79,9 +79,21 @@ export default function App() {
       });
       game.send({ type: "load_slot", id: save.id });
     }}
+    onDeleteJourney={save => game.send({ type: "delete_slot", id: save.id })}
   />;
   if (!joined) return <CharacterCreator
     onJoin={p => game.send({ type: "join", ...p })}
+    onImportHero={character => {
+      writePlayerIdentity({
+        playerName: character.name,
+        characterId: character.className.toLowerCase(),
+        sex: character.sex,
+        age: character.age,
+        bio: character.bio,
+        portraitUrl: character.portraitUrl,
+      });
+      game.send({ type: "join_hero", character });
+    }}
     connected={game.connected}
     onBack={() => setEntryStep("choose")}
   />;
@@ -310,6 +322,15 @@ function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>;
     if (!text.trim()) return;
     game.send({ type: "action", text: text.trim(), mode });
     setInput("");
+    game.send({ type: "presence_hint", writing: false });
+  };
+
+  // let the table see "Writing..." so nobody types the same action twice
+  const updateInput = (value: string) => {
+    const wasWriting = input.trim().length > 0;
+    const isWriting = value.trim().length > 0;
+    setInput(value);
+    if (wasWriting !== isWriting) game.send({ type: "presence_hint", writing: isWriting });
   };
 
   return (
@@ -458,7 +479,7 @@ function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>;
               </div>
               <form className="flex gap-2"
                 onSubmit={e => { e.preventDefault(); if (!state.dmBusy) act(input); }}>
-                <input value={input} onChange={e => setInput(e.target.value)}
+                <input value={input} onChange={e => updateInput(e.target.value)}
                   placeholder={state.dmBusy ? "The Storyteller is speaking..." : intentMode === "speak" ? "What do you say, and to whom?" : intentMode === "ask_dm" ? "Ask the Storyteller about your world..." : "What do you do?"}
                   disabled={state.dmBusy}
                   className="flex-1 bg-stone-900/85 border border-stone-700 rounded-xl px-4 py-3 outline-none focus:border-amber-600/60 disabled:opacity-60" />
@@ -608,13 +629,14 @@ function Avatar({ c, className }: { c: Character; className: string }) {
 function PartyBadge({ c, me, presence, onClick }: { c: Character; me: boolean; presence?: PartyPresence; onClick: () => void }) {
   const pct = Math.round((c.hp / c.maxHp) * 100);
   const activityLabel = presence?.activity === "acting" ? "Acting"
-    : presence?.activity === "speaking" ? "Speaking"
-      : presence?.activity === "asking_dm" ? "Asking DM"
-        : presence?.activity === "starting_journey" ? "Starting Journey"
-          : presence?.activity === "waiting_for_roll" ? "Roll Needed"
-            : presence?.activity === "resolving_roll" ? "Rolling"
-              : presence?.activity === "following" ? "Following"
-                : "Ready";
+    : presence?.activity === "writing" ? "Writing..."
+      : presence?.activity === "speaking" ? "Speaking"
+        : presence?.activity === "asking_dm" ? "Asking DM"
+          : presence?.activity === "starting_journey" ? "Starting Journey"
+            : presence?.activity === "waiting_for_roll" ? "Roll Needed"
+              : presence?.activity === "resolving_roll" ? "Rolling"
+                : presence?.activity === "following" ? "Following"
+                  : "Ready";
   const status = !presence?.online
     ? presence?.activity === "waiting_for_roll" ? `Offline · Roll Needed${presence.detail ? ` · ${presence.detail}` : ""}` : "Offline"
     : presence.activity === "following" && presence.detail
@@ -910,6 +932,10 @@ function QuestDrawer({ quests, onClose }: { quests: Quest[]; onClose: () => void
 function SettingsPanel({ game, sound, onClose }: { game: ReturnType<typeof useGame>; sound: SoundscapeControls; onClose: () => void }) {
   const [slotName, setSlotName] = useState("");
   const state = game.state!;
+  const identityName = readPlayerIdentity()?.playerName?.toLowerCase();
+  const myHero = identityName
+    ? state.party.find(c => c.name.toLowerCase() === identityName) ?? null
+    : null;
   return (
     <Drawer title="Settings" onClose={onClose}>
       <SectionTitle>Narrator</SectionTitle>
@@ -999,6 +1025,23 @@ function SettingsPanel({ game, sound, onClose }: { game: ReturnType<typeof useGa
           onChange={e => sound.setEffectsVolume(Number(e.target.value))}
           className="w-full accent-amber-600" />
       </label>
+
+      <SectionTitle>Take It With You</SectionTitle>
+      <div className="grid grid-cols-2 gap-2 mb-2">
+        <a href={assetUrl("/export/journey")} download
+          className="rounded-xl border border-stone-700 bg-stone-900/60 py-2 text-center text-sm text-stone-300 transition hover:border-amber-500/60">
+          Download This Journey
+        </a>
+        {myHero ? (
+          <a href={assetUrl(`/export/hero/${encodeURIComponent(myHero.id)}`)} download
+            className="rounded-xl border border-stone-700 bg-stone-900/60 py-2 text-center text-sm text-stone-300 transition hover:border-amber-500/60">
+            Download My Hero
+          </a>
+        ) : (
+          <span className="rounded-xl border border-stone-800 py-2 text-center text-sm text-stone-600">Download My Hero</span>
+        )}
+      </div>
+      <p className="-mt-0 mb-6 text-[11px] leading-relaxed text-stone-600">Journey files carry the whole world: story, scenes, NPCs, quests, and every hero. Hero files carry one character with level, stats, and inventory - import them on any Grimoire host from the character screen or journey chooser.</p>
 
       <SectionTitle>Saves (stored on the host)</SectionTitle>
       <div className="flex gap-2 mb-3">

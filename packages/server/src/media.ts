@@ -7,6 +7,13 @@ import { AUDIO_DIR, CONFIG, IMG_DIR } from "./config.js";
 fs.mkdirSync(IMG_DIR, { recursive: true });
 fs.mkdirSync(AUDIO_DIR, { recursive: true });
 
+/** Imported heroes may reference portraits that only existed on another host. */
+export function assetImageExists(url: string | null | undefined): boolean {
+  if (!url || !url.startsWith("/assets/img/")) return false;
+  const name = path.basename(url);
+  return name.length > 0 && fs.existsSync(path.join(IMG_DIR, name));
+}
+
 // ---------- Scene art (ComfyUI, fully async, cached by scene signature) ----------
 
 export function sceneSignature(
