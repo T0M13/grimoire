@@ -216,8 +216,8 @@ export default function CharacterCreator({
     randomizeDetails(nextSex);
   };
 
-  return <div className="min-h-screen w-screen overflow-y-auto flex items-center justify-center">
-    <form className="fadein w-full max-w-3xl px-4 md:px-6 py-6" onSubmit={event => {
+  return <div className="h-[100dvh] w-screen overflow-y-auto overscroll-y-contain">
+    <form className="fadein mx-auto flex min-h-[100dvh] w-full max-w-3xl flex-col justify-center px-4 py-6 md:px-6" onSubmit={event => {
       event.preventDefault();
       if (!connected || !valid) return;
       onJoin({

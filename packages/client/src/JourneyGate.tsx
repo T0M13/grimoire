@@ -32,7 +32,7 @@ export default function JourneyGate({
   };
 
   return (
-    <main className="min-h-[100dvh] w-screen overflow-y-auto bg-[radial-gradient(circle_at_top,#292016_0%,#0b0a09_58%)] px-4 py-8 text-stone-200">
+    <main className="h-[100dvh] w-screen overflow-y-auto overscroll-y-contain bg-[radial-gradient(circle_at_top,#292016_0%,#0b0a09_58%)] px-4 py-8 text-stone-200">
       <div className="fadein mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-3xl flex-col justify-center">
         <header className="mb-7 text-center">
           <h1 className="narration text-5xl tracking-wide text-amber-100/90">Grimoire</h1>

@@ -206,7 +206,8 @@ Current manual regression checklist:
   Test New Journey, Load Saved Journey, Back To Journeys, and Join Current Journey from a second
   isolated browser without resetting the active table.
 - Visit every creator tab, randomize a character, review the level-1 sheet, join, see `?`, then see
-  the generated portrait.
+  the generated portrait. On a short viewport, confirm Details scrolls from the heading through all
+  background skills and languages to the navigation buttons.
 - Open your own and another party member's sheet, then type and submit with the dock still open.
   Repeat with Map, Quests, and Settings; on mobile, scroll the dock without covering the composer.
 - Switch narrator sex and verify the next sentence uses the selected voice.
