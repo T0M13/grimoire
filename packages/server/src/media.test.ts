@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { SentenceStream, sceneSignature, synthesize } from "./media.js";
+import { environmentScenePrompt, npcPortraitSignature, SentenceStream, sceneSignature, synthesize } from "./media.js";
 
 function collect(chunks: string[]): string[] {
   const out: string[] = [];
@@ -59,6 +59,30 @@ describe("sceneSignature", () => {
   it("caches each art style separately", () => {
     expect(sceneSignature(scene, "painting")).not.toBe(sceneSignature(scene, "sketch"));
     expect(sceneSignature(scene, "sketch")).toBe(sceneSignature(scene, "sketch"));
+  });
+});
+
+describe("living-subject-free art", () => {
+  it("removes legacy figure clauses before painting a scene", () => {
+    const prompt = environmentScenePrompt({
+      name: "The Old Gate", kind: "ruined gate", timeOfDay: "dusk", weather: "fog",
+      imagePrompt: "broken stone arch, a hooded figure waits beneath it, claw marks across the door",
+    });
+    expect(prompt).toContain("broken stone arch");
+    expect(prompt).toContain("claw marks across the door");
+    expect(prompt).not.toContain("hooded figure");
+    expect(prompt).toContain("unoccupied environment-only");
+  });
+
+  it("keys subject portraits by look, type, and art style", () => {
+    const creature = {
+      name: "Mossback", sex: "male" as const, entityType: "creature" as const,
+      personality: "ancient and patient", appearance: "antlered moss-covered forest guardian",
+    };
+    expect(npcPortraitSignature(creature, "painting")).toMatch(/^npc-mossback--painting--[a-f0-9]{12}$/);
+    expect(npcPortraitSignature(creature, "painting")).not.toBe(npcPortraitSignature({ ...creature, appearance: "white cave wyrm" }, "painting"));
+    expect(npcPortraitSignature(creature, "painting")).not.toBe(npcPortraitSignature(creature, "sketch"));
+    expect(npcPortraitSignature({ ...creature, name: "竜" }, "painting")).toMatch(/^npc-entity--painting--/);
   });
 });
 

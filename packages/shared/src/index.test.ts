@@ -11,7 +11,10 @@ describe("interaction protocol", () => {
   it("accepts a structured NPC and quest transition", () => {
     const result = DmMoveSchema.parse({
       move: "narrate",
-      npc: { name: "Mara", sex: "female", personality: "wary but warm" },
+      npc: {
+        name: "Mara", sex: "female", entityType: "person", personality: "wary but warm",
+        appearance: "weathered ferryman in a moss-green coat",
+      },
       quest: {
         action: "advance", title: "The Missing Bell", objective: "Search the old belfry.",
         summary: "Mara heard the bell beneath the hill.", isMain: true,

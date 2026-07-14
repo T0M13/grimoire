@@ -35,6 +35,8 @@ activities ship, log entries need `scope`, `participants`, `locationId`, and `ev
 The shared-room foundation now distinguishes **Act**, **Speak**, and **Ask DM**. Speak creates a
 direct labeled NPC beat, and named NPCs keep a persisted voice profile across conversations.
 This is not private dialogue yet: all current-room clients still receive the same text and audio.
+Scenes now also carry up to eight structured visible people/creatures and render their separate
+portraits, but occupancy can currently change only with a scene move or a direct conversation.
 
 ## Authoritative model
 
@@ -72,19 +74,42 @@ Planned tables/entities:
 
 ## Scene and dialogue art
 
-- A location owns a stable establishing image cached from location identity plus composition.
-- Dialogue may request a cached **shot** of the same location with the speaking NPC foregrounded.
-- NPC appearance descriptions are stored once and reused in every prompt. Generated seeds and
-  prompts are persisted so revisiting the dialogue reuses the same image.
+- A location owns a stable **living-subject-free** establishing image cached from location identity
+  plus composition. Architecture, terrain, lighting, and physical evidence carry the story.
+- Named people and creatures own style-specific close-up portraits. The client composes those cards
+  beside dialogue and in the visible-scene rail; the storyteller never receives an avatar.
+- NPC appearance descriptions are stored once and reused. Portrait cache signatures include name,
+  type, voice-family sex, appearance, personality, art style, and policy version.
+- A later dialogue-shot system may combine a location plate and portrait reference, but must not
+  ask an unconditioned scene model to redraw tiny, inconsistent faces.
 - Player likeness consistency should later use portrait reference conditioning; names alone are
   never expected to produce a consistent face.
 - Art remains asynchronous and never blocks text or voice.
+
+## Map evolution
+
+The shipped Scene Map is intentionally local: it centers the current scene and arranges its known
+exit labels around it, with the active main objective and visible occupants. It is useful on mobile
+but is not a discovered-world graph.
+
+The authoritative region-map slice should add server-owned nodes and exits:
+
+```text
+WorldMap { currentLocationId, locations: Record<LocationId, LocationNode> }
+LocationNode { id, name, kind, x, y, visited, exits, presentNpcIds, questIds }
+WorldExit { id, label, toLocationId?, state: open|locked|unknown, oneWay }
+```
+
+Code creates IDs, graph links, exit state, and persistent SVG coordinates; the LLM supplies flavor,
+never identity or topology. Exit buttons then send a structured `exitId` rather than prose. Split
+party work later replaces the single current location with per-character/activity locations without
+discarding the graph.
 
 ## Delivery slices
 
 1. Add quest/event journal UI on the current shared room. **Party quest foundation complete**;
    personal/world scopes and deterministic world-event triggers remain.
-2. Add stable locations, occupants, and location-scoped public feeds.
+2. Add stable location IDs/graph exits, authoritative occupants, and location-scoped public feeds.
 3. Add private NPC conversation activities and recipient-scoped messages/audio.
 4. Allow non-conflicting activities to resolve concurrently with revision checks.
 5. Promote material activity outcomes into shared world events.

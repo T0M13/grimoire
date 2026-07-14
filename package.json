@@ -11,6 +11,7 @@
     "start:persistent": "node tools/host/start.mjs --persistent",
     "stop": "node tools/host/stop.mjs .",
     "demo": "node tools/api/autoplay.mjs",
+    "smoke:visual": "tsx spikes/visual-smoke.ts",
     "dev:server": "npm -w @grimoire/server run dev",
     "dev:client": "npm -w @grimoire/client run dev",
     "test": "vitest run",

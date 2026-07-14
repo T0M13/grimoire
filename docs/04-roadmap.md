@@ -32,12 +32,14 @@ The game is fun for ONE player with text + voice only.
   choices, flexible tools/languages, individual spell selection, and coin-buy equipment
 - [x] Storyteller voice (Kokoro **CUDA sidecar**, ~190 ms/sentence, sentence-streamed with
   early first-clause) + streamed text
-- [x] Scene-graph movement with clickable exits
+- [x] Clickable current-scene exits plus an honest Scene Map drawer
+- [ ] Persistent discovered-location graph, stable exit IDs, locked/unknown paths, and region layout
 - [x] Save/resume campaign (survives server restart + page refresh); session summaries pending
 - [x] Settings: table-wide narrator choice, per-tab audio controls, named local save slots,
   disconnect autosave, new-game/load flow, and hidden process lifecycle with last-tab cleanup
-- [x] Tab-local procedural soundscape: 12 mood profiles, crossfades, combat/boss arrangements,
-  UI/choice/scene/roll/result/event cues, and independent music/effects controls
+- [x] Tab-local procedural soundscape: 12 moods × 3 movements, deterministic scene/time/weather
+  scoring, 150-second movement changes, crossfades, combat/boss arrangements, gameplay cues, and
+  independent music/effects controls
 - [x] Explicit Act / Speak / Ask DM input modes with labeled speakers
 - [x] Persistent per-NPC Kokoro voice identity selected from sex/personality descriptors
 - [x] Structured main/side quest transitions and a Quest Journal drawer
@@ -53,11 +55,14 @@ The game is fun for ONE player with text + voice only.
   session-start recap (non-blocking)
 - [x] Mood-driven crossfade player and optional DM mood changes (procedural MVP)
 - [ ] Optional ACE-Step authored music batch tool + manifest to replace procedural profiles
-- [x] Character portraits at creation; NPC portraits remain pending
+- [x] Character portraits at creation plus async, cached, style-consistent NPC/creature portraits
+- [x] Living-subject-free scene backgrounds with structured visible occupants and dialogue avatars
 - 3D dice (dice-box) wired to roll requests
 
 ## Phase 3 — Friends join (multiplayer)
 
+- [x] Shared sequential WebSocket room, convergent party state, named roll ownership, reconnect,
+  and per-tab audio controls (two-client unit coverage)
 - Recipient-aware narration: the active character is always "you"; private and shared feeds
 - Location/activity model for split-party exploration and parallel NPC conversations
 - Personal, party, and world quest/event journal with deterministic transitions
@@ -77,16 +82,15 @@ The game is fun for ONE player with text + voice only.
 - Detailed design and implementation order: `08-progression-and-content.md`
 - Spotlight system; private whispers; per-player roll locks
 - Tailscale/cloudflared setup docs + connection doctor in the launcher
-- Multi-voice NPC dialogue
 - **Playtest gate:** 3-player session, zero desyncs, spotlight feels fair
 
-## Phase 4 — Real combat
+## Phase 5 — Tactical combat presentation
 - Zone-based tactical view, initiative, action bar from sheet, conditions, death saves
 - Monster statblocks + behavior policy (constrained LLM pick → engine-validated)
 - Encounter builder with XP budget + difficulty settings; monte-carlo balance harness
 - Combat narration polish (crits, kills, boss-intro emphasis moments — art + sting, no interruption)
 
-## Phase 5 — Depth & longevity
+## Phase 6 — Depth & longevity
 - Campaign skeleton/arc system with hidden outline revision
 - Vector memory recall (sqlite-vec); NPC attitude tracking
 - Level-up ceremonies, spellcasting (SRD subset), rests, shops/economy basics

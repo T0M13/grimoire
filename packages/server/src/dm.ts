@@ -13,6 +13,7 @@ function stateBlock(state: PublicState): string {
       name: state.scene.name, kind: state.scene.kind, timeOfDay: state.scene.timeOfDay,
       weather: state.scene.weather, mood: state.scene.mood,
       description: state.scene.description.slice(0, 400), exits: state.scene.exits,
+      visibleNpcs: state.scene.occupants.map(npc => npc.name),
     },
     party: state.party.map(c => ({
       name: c.name, sex: c.sex, age: c.age, class: c.className, level: c.level,
@@ -31,7 +32,8 @@ function stateBlock(state: PublicState): string {
       title: q.title, objective: q.objective, summary: q.summary, status: q.status, isMain: q.isMain,
     })),
     knownNpcs: Object.values(state.npcVoices).map(npc => ({
-      name: npc.name, sex: npc.sex, personality: npc.personality,
+      name: npc.name, sex: npc.sex, entityType: npc.entityType,
+      personality: npc.personality, appearance: npc.appearance,
     })),
   };
   return `CAMPAIGN STATE (authoritative - do not contradict):\n${JSON.stringify(compact, null, 1)}`;
@@ -69,14 +71,18 @@ const MOVE_INSTRUCTION = `ENGINE: Choose your next DM move for the situation abo
   (enter, leave, go through, step in, follow, travel, descend, flee), you MUST choose change_scene
   NOW and put them in the new place - never answer movement with more description of the current
   location. Also use it for any genuinely new location. Fill "scene" fully. Its
-  "imagePrompt" must be a concrete camera composition: say interior/exterior, architecture and
-  terrain, time/weather/lighting, and the visible NPCs plus what they are physically doing. Show
-  the current story hook rather than an empty generic landscape. Use physical descriptions, not
-  character names, and include no signs, captions, or written text.
+  "imagePrompt" is an EMPTY-STAGE camera composition: NO people, NO faces, NO figures, NO crowds,
+  NO animals, and NO monsters or creatures. Put every named visible NON-PLAYER person or creature
+  in "occupants" instead, with a stable appearance description reused from state whenever possible.
+  Never list party members there; their portraits already come from the character sheet.
+  Describe interior/exterior, architecture and terrain, time/weather/lighting, and physical
+  EVIDENCE of the story hook - an overturned cart, a smashed door, claw marks, an abandoned meal,
+  a glowing rune. The place must tell the story by itself. No signs, captions, or written text.
 - "give_item": a player just legitimately obtained a specific item. Fill "item".
 - "narrate": plain storytelling beat - only when nothing above applies.
-When an NPC is directly responding, fill optional "npc" with their stable name, sex, and concise
-personality. Reuse established NPC facts from state.
+When an NPC or named creature is directly responding, fill optional "npc" with their stable name,
+voice-family sex, entity type, concise personality, and concrete physical appearance. Reuse every
+established NPC fact from state; never casually redesign a known subject.
 Use optional "quest" only for a real objective transition: start a main/side quest, advance its
 current objective, complete it, or fail it. Preserve the main quest through setbacks; failure in a
 check should create a cost, complication, or alternate route rather than strand the story.
@@ -99,6 +105,7 @@ export async function decideMove(state: PublicState, history: ChatMessage[], pla
 
 function semanticallyValid(move: DmMove, state: PublicState, playerAction: string): boolean {
   const partyNames = new Set(state.party.map(c => c.name.toLowerCase()));
+  if (move.npc && partyNames.has(move.npc.name.toLowerCase())) return false;
   if (playerAction.includes("INTERACTION MODE: SPEAK") && !move.npc) return false;
   if (move.move === "request_check")
     return !!move.check && partyNames.has(move.check.playerName.toLowerCase());

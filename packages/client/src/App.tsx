@@ -4,8 +4,9 @@ import {
   classRulesById, pointBuySpent,
 } from "@grimoire/rules";
 import {
-  SKILL_ABILITY, SKILLS, ABILITIES,
-  type Ability, type AbilityScores, type Character, type NarrationSpeaker, type Quest, type Skill,
+  npcKey, SKILL_ABILITY, SKILLS, ABILITIES,
+  type Ability, type AbilityScores, type ArtStyle, type Character, type NarrationSpeaker,
+  type NpcSpeaker, type NpcVoiceProfile, type Quest, type Scene, type Skill,
 } from "@grimoire/shared";
 import { assetUrl, useGame } from "./useGame";
 import { useSoundscape, type SoundscapeControls } from "./useSoundscape";
@@ -229,6 +230,7 @@ function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>;
   const [intentMode, setIntentMode] = useState<"act" | "speak" | "ask_dm">("act");
   const [premise, setPremise] = useState("");
   const [sheetFor, setSheetFor] = useState<string | null>(null); // character id
+  const [mapOpen, setMapOpen] = useState(false);
   const [questsOpen, setQuestsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { state } = game;
@@ -272,6 +274,10 @@ function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>;
             className="px-2.5 py-1 rounded-full border border-stone-600/60 bg-black/40 text-xs hover:border-amber-500/60">
             Sheet
           </button>
+          <button onClick={() => setMapOpen(true)}
+            className="px-2.5 py-1 rounded-full border border-stone-600/60 bg-black/40 text-xs hover:border-amber-500/60">
+            Map
+          </button>
           <button onClick={() => setQuestsOpen(true)}
             className="px-2.5 py-1 rounded-full border border-stone-600/60 bg-black/40 text-xs hover:border-amber-500/60">
             Quests{state.quests.filter(q => q.status === "active").length > 0 ? ` · ${state.quests.filter(q => q.status === "active").length}` : ""}
@@ -284,6 +290,10 @@ function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>;
       </div>
 
       {sheetCharacter && <SheetDrawer c={sheetCharacter} onClose={() => setSheetFor(null)} />}
+      {mapOpen && <MapDrawer scene={state.scene}
+        activeQuest={state.quests.find(q => q.isMain && q.status === "active")}
+        onExit={exit => { setMapOpen(false); act(`We head to ${exit}.`, "act"); }}
+        onClose={() => setMapOpen(false)} />}
       {questsOpen && <QuestDrawer quests={state.quests} onClose={() => setQuestsOpen(false)} />}
       {settingsOpen && <SettingsPanel game={game} sound={sound} onClose={() => setSettingsOpen(false)} />}
 
@@ -294,6 +304,10 @@ function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>;
             onClick={() => setSheetFor(c.id)} />
         ))}
       </div>
+
+      {!notStarted && state.scene.occupants.length > 0 && (
+        <SceneCast occupants={state.scene.occupants} profiles={state.npcVoices} artStyle={state.artStyle} />
+      )}
 
       {/* dice result overlay */}
       {game.lastRoll && (
@@ -402,6 +416,56 @@ function SceneArt({ url }: { url: string | null }) {
   );
 }
 
+function portraitFor(profile: NpcVoiceProfile | undefined, artStyle: ArtStyle): string | null {
+  if (!profile) return null;
+  if (profile.portraitUrls) return profile.portraitUrls[artStyle] ?? null;
+  return profile.portraitUrl ?? null;
+}
+
+function SubjectPortrait({
+  subject, profile, artStyle, className,
+}: {
+  subject: Pick<NpcSpeaker, "name" | "entityType">;
+  profile?: NpcVoiceProfile;
+  artStyle: ArtStyle;
+  className: string;
+}) {
+  const url = portraitFor(profile, artStyle);
+  if (url) return <img src={assetUrl(url)} alt={`${subject.name} portrait`}
+    className={`${className} fadein-fast object-cover object-top border ${subject.entityType === "creature" ? "border-red-800/70" : "border-emerald-800/60"}`} />;
+  return (
+    <div aria-label={`${subject.name} portrait painting`} title="Portrait Painting"
+      className={`${className} bg-stone-950/90 border ${subject.entityType === "creature" ? "border-red-900/60" : "border-emerald-900/50"} flex items-center justify-center`}>
+      <span className="text-stone-500 narration text-lg">?</span>
+    </div>
+  );
+}
+
+function SceneCast({
+  occupants, profiles, artStyle,
+}: {
+  occupants: NpcSpeaker[];
+  profiles: Record<string, NpcVoiceProfile>;
+  artStyle: ArtStyle;
+}) {
+  return (
+    <aside aria-label="Visible Characters"
+      className="absolute right-4 top-16 hidden max-w-52 flex-col gap-2 md:flex">
+      <div className="text-right text-[10px] uppercase tracking-widest text-stone-400/70">In This Scene</div>
+      {occupants.map(subject => (
+        <div key={npcKey(subject.name)} className="flex items-center justify-end gap-2 rounded-xl border border-stone-700/45 bg-black/55 px-2 py-1.5 backdrop-blur-sm">
+          <div className="min-w-0 text-right">
+            <div className="truncate text-xs text-stone-200">{subject.name}</div>
+            <div className="truncate text-[10px] capitalize text-stone-500">{subject.entityType}</div>
+          </div>
+          <SubjectPortrait subject={subject} profile={profiles[npcKey(subject.name)]}
+            artStyle={artStyle} className="h-11 w-11 shrink-0 rounded-lg" />
+        </div>
+      ))}
+    </aside>
+  );
+}
+
 function Narration({ state, live, liveSpeaker }: { state: NonNullable<ReturnType<typeof useGame>["state"]>; live: string | null; liveSpeaker: NarrationSpeaker | null }) {
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => { box.current?.scrollTo({ top: box.current.scrollHeight }); }, [live, state.log.length]);
@@ -410,18 +474,30 @@ function Narration({ state, live, liveSpeaker }: { state: NonNullable<ReturnType
     <div ref={box} className="w-full max-w-3xl max-h-56 md:max-h-64 overflow-y-auto rounded-2xl bg-black/55 backdrop-blur-sm px-6 py-4 space-y-3">
       {recent.map((e, i) => {
         const kind = e.kind ?? (e.who === "dm" ? "dm" : e.who === "system" ? "system" : "player");
+        const npc = kind === "npc" ? state.npcVoices[npcKey(e.who)] : undefined;
         return (
-          <p key={`${state.log.length - recent.length + i}`} className={kind === "dm" ? "narration text-lg leading-relaxed text-amber-50/95" : kind === "npc" ? "narration text-lg leading-relaxed text-emerald-100/95" : "text-sm text-sky-200/85"}>
-            {kind !== "system" && <span className={`font-semibold ${kind === "dm" || kind === "npc" ? "text-xs uppercase tracking-wider mr-1.5 opacity-65" : ""}`}>{kind === "dm" && e.who === "dm" ? "Storyteller" : e.who}: </span>}
-            {kind === "system" ? <span className="text-stone-400 italic text-xs">{e.text}</span> : e.text}
-          </p>
+          <div key={`${state.log.length - recent.length + i}`} className={kind === "npc" ? "flex items-start gap-3" : ""}>
+            {kind === "npc" && npc && <SubjectPortrait subject={npc} profile={npc}
+              artStyle={state.artStyle} className="h-11 w-11 shrink-0 rounded-xl" />}
+            <p className={kind === "dm" ? "narration text-lg leading-relaxed text-amber-50/95" : kind === "npc" ? "narration flex-1 text-lg leading-relaxed text-emerald-100/95" : "text-sm text-sky-200/85"}>
+              {kind !== "system" && <span className={`font-semibold ${kind === "dm" || kind === "npc" ? "text-xs uppercase tracking-wider mr-1.5 opacity-65" : ""}`}>{kind === "dm" && e.who === "dm" ? "Storyteller" : e.who}: </span>}
+              {kind === "system" ? <span className="text-stone-400 italic text-xs">{e.text}</span> : e.text}
+            </p>
+          </div>
         );
       })}
       {live !== null && (
-        <p className="narration text-lg leading-relaxed text-amber-50/95">
-          <span className={`font-semibold text-xs uppercase tracking-wider mr-1.5 opacity-65 ${liveSpeaker?.kind === "npc" ? "text-emerald-200" : ""}`}>{liveSpeaker?.name ?? "Storyteller"}: </span>
-          {live}<span className="ember"><span>▍</span></span>
-        </p>
+        <div className={liveSpeaker?.kind === "npc" ? "flex items-start gap-3" : ""}>
+          {liveSpeaker?.kind === "npc" && state.npcVoices[npcKey(liveSpeaker.name)] && (
+            <SubjectPortrait subject={state.npcVoices[npcKey(liveSpeaker.name)]!}
+              profile={state.npcVoices[npcKey(liveSpeaker.name)]}
+              artStyle={state.artStyle} className="h-11 w-11 shrink-0 rounded-xl" />
+          )}
+          <p className={`narration text-lg leading-relaxed ${liveSpeaker?.kind === "npc" ? "flex-1 text-emerald-100/95" : "text-amber-50/95"}`}>
+            <span className={`font-semibold text-xs uppercase tracking-wider mr-1.5 opacity-65 ${liveSpeaker?.kind === "npc" ? "text-emerald-200" : ""}`}>{liveSpeaker?.name ?? "Storyteller"}: </span>
+            {live}<span className="ember"><span>▍</span></span>
+          </p>
+        </div>
       )}
       {state.dmBusy && live === null && (
         <p className="ember text-stone-400 text-sm">The Storyteller considers<span>.</span><span>.</span><span>.</span></p>
@@ -614,6 +690,57 @@ function SheetDrawer({ c, onClose }: { c: Character; onClose: () => void }) {
   );
 }
 
+function MapDrawer({
+  scene, activeQuest, onExit, onClose,
+}: {
+  scene: Scene;
+  activeQuest?: Quest;
+  onExit: (exit: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Drawer title="Scene Map" onClose={onClose}>
+      <p className="mb-3 text-xs leading-relaxed text-stone-500">
+        This map shows what is established right now. Undiscovered geography is never invented by the client.
+      </p>
+      <div className="relative mb-4 h-72 overflow-hidden rounded-2xl border border-amber-950/60 bg-[radial-gradient(circle_at_center,#322718_0,#17130e_48%,#090807_100%)]">
+        <div className="absolute inset-0 opacity-20"
+          style={{ backgroundImage: "linear-gradient(rgba(217,170,92,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(217,170,92,.12) 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
+        <div className="absolute left-1/2 top-1/2 w-40 -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-amber-600/70 bg-stone-950/90 px-3 py-3 text-center shadow-xl shadow-black/60">
+          <div className="text-[10px] uppercase tracking-widest text-amber-500/70">Current Location</div>
+          <div className="narration mt-1 text-lg text-amber-100">{scene.name}</div>
+          <div className="mt-1 text-[10px] capitalize text-stone-500">{scene.kind} · {scene.timeOfDay} · {scene.weather}</div>
+        </div>
+        {scene.exits.map((exit, index) => {
+          const angle = -Math.PI / 2 + (index * Math.PI * 2) / Math.max(1, scene.exits.length);
+          const left = 50 + Math.cos(angle) * 38;
+          const top = 50 + Math.sin(angle) * 38;
+          return (
+            <button key={exit} data-sfx="choice" onClick={() => onExit(exit)}
+              style={{ left: `${left}%`, top: `${top}%` }}
+              className="absolute max-w-28 -translate-x-1/2 -translate-y-1/2 rounded-xl border border-stone-600/70 bg-black/80 px-2.5 py-1.5 text-xs leading-tight text-stone-200 hover:border-amber-500/70 hover:text-amber-100">
+              {exit}
+            </button>
+          );
+        })}
+        {scene.exits.length === 0 && <div className="absolute bottom-4 inset-x-0 text-center text-xs italic text-stone-600">No Known Exits</div>}
+      </div>
+      {activeQuest && (
+        <div className="mb-3 rounded-xl border border-amber-900/50 bg-amber-950/15 px-3 py-2">
+          <div className="text-[10px] uppercase tracking-widest text-amber-600/70">Main Quest</div>
+          <div className="mt-0.5 text-sm text-stone-200">{activeQuest.objective}</div>
+        </div>
+      )}
+      {scene.occupants.length > 0 && (
+        <div className="rounded-xl border border-stone-800 bg-stone-900/45 px-3 py-2">
+          <div className="text-[10px] uppercase tracking-widest text-stone-600">Visible Here</div>
+          <div className="mt-1 text-sm text-stone-300">{scene.occupants.map(npc => npc.name).join(" · ")}</div>
+        </div>
+      )}
+    </Drawer>
+  );
+}
+
 function QuestDrawer({ quests, onClose }: { quests: Quest[]; onClose: () => void }) {
   const ordered = [...quests].sort((a, b) => Number(b.status === "active") - Number(a.status === "active") || Number(b.isMain) - Number(a.isMain));
   return (
@@ -681,7 +808,7 @@ function SettingsPanel({ game, sound, onClose }: { game: ReturnType<typeof useGa
           </button>
         ))}
       </div>
-      <p className="-mt-1 mb-6 text-[11px] leading-relaxed text-stone-600">Painting is classical oils; Sketch looks like aged ink drawings from an old tome. The current scene repaints in the new style.</p>
+      <p className="-mt-1 mb-6 text-[11px] leading-relaxed text-stone-600">Painting is classical oils; Sketch looks like aged ink drawings from an old tome. Backgrounds show places and story evidence only; named people and creatures use separate close-up portraits.</p>
 
       <SectionTitle>Soundscape</SectionTitle>
       <div className="grid grid-cols-2 gap-2 mb-3">
@@ -697,8 +824,9 @@ function SettingsPanel({ game, sound, onClose }: { game: ReturnType<typeof useGa
       <div className="mb-3 rounded-xl border border-stone-800 bg-stone-900/55 px-3 py-2">
         <div className="text-[10px] uppercase tracking-widest text-stone-600">Now Playing</div>
         <div className="text-sm text-stone-300">{sound.trackLabel}</div>
-        <div className="text-[11px] capitalize text-stone-600">{sound.mood} scene</div>
+        <div className="text-[11px] capitalize text-stone-600">{sound.mood} · {state.scene.timeOfDay} · {state.scene.weather}</div>
       </div>
+      <p className="-mt-1 mb-3 text-[11px] leading-relaxed text-stone-600">Each atmosphere has three movements. The score follows location, mood, time, and weather, then changes movement during longer scenes.</p>
       <label className={`block mb-3 ${sound.musicMuted ? "opacity-45" : ""}`}>
         <span className="text-xs text-stone-500">Music Volume</span>
         <input type="range" min={0} max={1} step={0.05} value={sound.musicVolume}

@@ -62,10 +62,40 @@ with systemd.
 - `GRIMOIRE_BIND_HOST` restricts the two public listeners to one interface.
 - `GRIMOIRE_GAME_PORT` / `GRIMOIRE_TTS_PORT` override the Grimoire-owned backend ports.
 
+## Test multiplayer today
+
+Use persistent mode so closing a test window does not tear down the host between steps:
+
+```powershell
+npm run start:persistent
+```
+
+On one PC, open the game in two isolated storage contexts: normal Chrome plus InPrivate Edge, or
+two browser profiles. Two ordinary tabs share `grimoire.player` and therefore attach to the same
+hero. Create a different hero in each context and verify:
+
+1. Both party badges appear in both windows.
+2. Starting or acting in either window updates the same scene, quest, log, and art in both.
+3. Acting from the second window while `dmBusy` is true receives the busy message.
+4. Only the character named by a pending check sees and can use the Roll button.
+5. Narrator/art-style choices synchronize, while voice/music/effects volume remains per tab.
+6. Refresh reattaches the correct hero; closing one window leaves the other session running.
+
+For a LAN test, find the host's private IPv4 address with `ipconfig`, allow Node on Windows
+**Private** networks if prompted, and open `http://HOST-IP:5173` from the second device. Verify
+`http://HOST-IP:8787/health` there as well; both ports must be reachable. Finish with `npm stop`.
+
+This is currently a sequential shared table, not split-party multiplayer: one scene, one global
+DM lock, public dialogue/audio, no lobby/invite code, and no authenticated host controls. Use only
+a trusted LAN or VPN.
+
 ## Maintenance
 
 - `npm test` — rules/media/lifecycle suite. `npm run typecheck` — strict TS across the repo.
 - `node spikes/e2e-smoke.mjs` — drives a full game turn against the live stack.
+- `npm run smoke:visual` — isolated environment/person/creature ComfyUI QA; does not touch SQLite.
+- `packages/server/src/game.multiplayer.test.ts` — two isolated sockets converge on one party and
+  enforce named roll ownership without touching a live campaign.
 - `npm run demo` — autoplay bot plays for 2 minutes (see `docs/09-api.md`).
 - Reset the campaign: delete `var/grimoire.db`. Generated art/audio cache: `var/assets/`.
 - Rules attribution: `NOTICE.md`; exact SRD coverage: `docs/07-srd-rules-coverage.md`.

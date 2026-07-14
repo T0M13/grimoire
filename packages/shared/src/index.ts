@@ -110,6 +110,22 @@ export type Character = z.infer<typeof CharacterSchema>;
 
 // ---------- Scene / world ----------
 
+/** A named living subject rendered separately from the people-free scene background. */
+export const NpcSpeakerSchema = z.object({
+  name: z.string().min(1).max(60),
+  /** Selects the closest available voice family; creatures may still use either family. */
+  sex: SexSchema,
+  entityType: z.enum(["person", "creature"]).default("person"),
+  personality: z.string().min(1).max(100),
+  /** Stable visual description ("scarred old dockworker, gray stubble") for portrait continuity. */
+  appearance: z.string().min(1).max(140),
+});
+export type NpcSpeaker = z.infer<typeof NpcSpeakerSchema>;
+
+export function npcKey(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 export const SceneSchema = z.object({
   name: z.string(),
   kind: z.string(),               // "tavern", "forest road", ...
@@ -118,6 +134,8 @@ export const SceneSchema = z.object({
   mood: MoodSchema,
   description: z.string(),
   exits: z.array(z.string()).max(6),
+  /** Named non-player subjects visible here. Party portraits live separately; none enter scene art. */
+  occupants: z.array(NpcSpeakerSchema).max(8).default([]),
   imagePrompt: z.string(),
   imageUrl: z.string().nullable().default(null),
 });
@@ -144,13 +162,6 @@ export const CheckIntentSchema = z.object({
 });
 export type CheckIntent = z.infer<typeof CheckIntentSchema>;
 
-export const NpcSpeakerSchema = z.object({
-  name: z.string().min(1).max(60),
-  sex: SexSchema,
-  personality: z.string().min(1).max(100),
-});
-export type NpcSpeaker = z.infer<typeof NpcSpeakerSchema>;
-
 export const QuestUpdateSchema = z.object({
   action: z.enum(["start", "advance", "complete", "fail"]),
   title: z.string().min(1).max(80),
@@ -174,6 +185,7 @@ export const DmMoveSchema = z.object({
       weather: z.enum(["clear", "rain", "storm", "snow", "fog"]),
       mood: MoodSchema,
       exits: z.array(z.string()).max(6),
+      occupants: z.array(NpcSpeakerSchema).max(8).default([]),
       imagePrompt: z.string(),
     })
     .optional(),
@@ -193,9 +205,11 @@ export const DM_MOVE_JSON_SCHEMA = {
       properties: {
         name: { type: "string", maxLength: 60 },
         sex: { type: "string", enum: ["male", "female"] },
+        entityType: { type: "string", enum: ["person", "creature"] },
         personality: { type: "string", maxLength: 100 },
+        appearance: { type: "string", maxLength: 140 },
       },
-      required: ["name", "sex", "personality"],
+      required: ["name", "sex", "entityType", "personality", "appearance"],
     },
     quest: {
       type: "object",
@@ -227,9 +241,24 @@ export const DM_MOVE_JSON_SCHEMA = {
         weather: { type: "string", enum: ["clear", "rain", "storm", "snow", "fog"] },
         mood: { type: "string", enum: [...MOODS] },
         exits: { type: "array", items: { type: "string" }, maxItems: 6 },
+        occupants: {
+          type: "array",
+          maxItems: 8,
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string", maxLength: 60 },
+              sex: { type: "string", enum: ["male", "female"] },
+              entityType: { type: "string", enum: ["person", "creature"] },
+              personality: { type: "string", maxLength: 100 },
+              appearance: { type: "string", maxLength: 140 },
+            },
+            required: ["name", "sex", "entityType", "personality", "appearance"],
+          },
+        },
         imagePrompt: { type: "string" },
       },
-      required: ["name", "kind", "timeOfDay", "weather", "mood", "exits", "imagePrompt"],
+      required: ["name", "kind", "timeOfDay", "weather", "mood", "exits", "occupants", "imagePrompt"],
     },
     item: {
       type: "object",
@@ -347,6 +376,10 @@ export interface Quest {
 
 export interface NpcVoiceProfile extends NpcSpeaker {
   voice: string;
+  /** Legacy current-style URL; retained while older saves migrate. */
+  portraitUrl?: string | null;
+  /** Style-specific close-up portraits; missing entries paint asynchronously. */
+  portraitUrls?: Partial<Record<ArtStyle, string>>;
 }
 
 export interface SaveMeta {

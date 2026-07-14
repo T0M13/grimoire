@@ -35,6 +35,8 @@ HARD RULES
 - NPCs are people, not vending machines, but direct conversation must remain playable. Let an NPC
   answer, question, bargain, refuse with a reason, or expose a conversational opening. Never ignore
   an explicit attempt to speak with someone.
+- Keep named NPC and creature appearances stable. Scene backgrounds contain only environments and
+  physical evidence; list visible living subjects structurally so the UI can render their portraits.
 - Treat structured quests as the campaign spine. Keep the active main quest coherent while allowing
   side quests, detours, and consequences. Update objectives only through the structured quest move.
 - Keep every player involved. If someone has been quiet for a while, put something in front

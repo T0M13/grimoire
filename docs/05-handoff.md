@@ -14,11 +14,13 @@ The creator is split into compact tabs and can randomize a complete legal build.
 generate a custom portrait, begin
 a campaign, act through free text or suggestions, make deterministic skill checks, hear streamed
 Kokoro narration, see asynchronous scene art, inspect character sheets, and resume from SQLite.
-After the first browser gesture, a procedural soundtrack follows scene mood and sound cues react
-to choices, location changes, checks, results, combat, and system events.
+After the first browser gesture, a procedural soundtrack follows location, scene mood, time, and
+weather, rotates through longer-scene movements, and reacts to choices, location changes, checks,
+results, combat, and system events.
 
-The game supports multiple browser clients on one authoritative WebSocket room, but the full
-multiplayer lobby/seat/spotlight feature set remains Phase 3 work.
+The game supports multiple browser clients on one authoritative, sequential WebSocket room. It is
+not yet the Phase 3 lobby/activity system: there is one shared location, one global DM lock, public
+dialogue/audio, name-only reconnect identity, and no host authorization or private conversations.
 
 ## Implemented features
 
@@ -35,13 +37,16 @@ multiplayer lobby/seat/spotlight feature set remains Phase 3 work.
 - Deterministic rules engine for dice, skill checks, damage, and healing; ability checks correctly
   do not auto-succeed/fail on natural 20/1. The model chooses a named difficulty category and code
   maps it to the SRD DC scale. Exact coverage is in `docs/07-srd-rules-coverage.md`.
-- Async ComfyUI scene art with composition-aware caching and crossfade presentation. Prompts
-  specify indoor/outdoor context, visible NPCs, and their physical action in the current hook.
+- Async ComfyUI living-subject-free environment art with policy-versioned composition caching,
+  legacy figure-clause filtering, full-signature stale-result guards, and crossfade presentation.
+- Structured scene occupants for named people and creatures. Each receives a hashed, style-specific
+  close-up portrait asynchronously; dialogue rows and the visible-scene rail show `?` until ready.
 - Kokoro CUDA narration using `bm_fable` (male) and `af_heart` (female).
 - Per-tab mute, volume, and pause/resume. Muting cuts the current sentence immediately.
-- Per-tab Web Audio soundscape covering all 12 scene moods with crossfades, percussive combat/boss
-  arrangements, and synthesized UI/choice/scene/roll/result/event cues. Music and effects each
-  have their own persisted mute/volume controls; no audio assets or server-side player are needed.
+- Per-tab Web Audio soundscape covering all 12 scene moods with three movements each. A stable scene
+  hash picks the opening movement; location kind, time, and weather modify it; long scenes rotate
+  every 150 seconds. Crossfades, combat/boss arrangements, gameplay cues, and independent persisted
+  music/effects controls remain asset-free and browser-local.
 - Table-wide narrator selection persisted in campaign state.
 - Explicit Act, Speak, and Ask DM intent modes. Speak requires a substantive direct NPC response;
   Ask DM yields a labeled out-of-character Storyteller/DM answer without advancing time.
@@ -50,6 +55,8 @@ multiplayer lobby/seat/spotlight feature set remains Phase 3 work.
 - Structured quest start/advance/complete/fail events, one opening main quest fallback, and a Quest
   Journal with active/completed/failed presentation.
 - Inventory sheet cards group duplicates and use code-native category icons without binary assets.
+- Scene Map drawer with the authoritative current location, exits, main objective, and visible
+  occupants. It deliberately does not claim to be the still-planned persistent region graph.
 - Continuous SQLite campaign persistence plus named host-local save/load/delete slots.
 - Disconnect autosave. Closing/disconnecting the final browser also aborts in-flight TTS.
 - Cross-platform host supervisor with per-service logs and automatic cleanup 15 seconds after
@@ -117,7 +124,8 @@ from Git. They live under `vendor/` and `var/` and are reproducible or machine-l
 - `packages/server/src/db.ts`: SQLite write-through campaign, event log, and save slots.
 - `packages/client/src/useGame.ts`: WebSocket/reconnect state and narration audio engine.
 - `packages/client/src/useSoundscape.ts`: tab-local music/SFX graph, mood profiles, cue routing,
-  persisted controls, first-gesture unlock, and page-close cleanup.
+  deterministic scene/time/weather selection, movement rotation, persisted controls, first-gesture
+  unlock, and page-close cleanup.
 - `packages/shared/src/index.ts`: also owns interaction modes, NPC speaker/profile, quest update,
   quest state, and live narration-speaker contracts.
 - `packages/client/src/CharacterCreator.tsx`: guided SRD creator and final-sheet review.
@@ -151,6 +159,8 @@ npm run typecheck
 ```
 
 For live-stack changes, also run `node spikes/e2e-smoke.mjs` and manually test the relevant UI.
+For scene/portrait changes, `npm run smoke:visual` generates an isolated environment, person, and
+creature asset under `var/assets/img/` without touching the active campaign.
 
 Current manual regression checklist:
 
@@ -160,9 +170,15 @@ Current manual regression checklist:
 - Switch narrator sex and verify the next sentence uses the selected voice.
 - During narration: pause, resume, change volume, then mute mid-sentence.
 - In Settings, independently mute and adjust music/effects; confirm the Now Playing label matches
-  the scene, choices click, a requested roll cues, and combat/boss mood changes the arrangement.
+  the scene, time, and weather; wait for or temporarily shorten the movement interval and confirm a
+  same-scene variation; verify choices, rolls, combat, and boss arrangements.
 - Use Speak with two different NPCs, then revisit the first; verify direct replies, distinct voices,
-  and stable voice reuse. Use Ask DM and verify it answers without moving the scene.
+  stable voice reuse, `?` → close-up portrait, and style-specific portrait reuse. Repeat with one
+  named creature. Storyteller narration must never receive an avatar.
+- Confirm freshly painted scenes contain no people, faces, animals, or monsters, including an old
+  save whose stored image prompt mentioned a figure. Open Map and exercise every current exit.
+- Multiplayer: use two isolated browser profiles, join two different heroes, verify both converge
+  on the same party/scene, only the named hero can roll, and one tab closing leaves the other alive.
 - Open Quests and verify the opening main quest; inspect duplicate inventory item grouping/icons.
 - Create a named save, start a new game, load the save, and verify hero/story/voice restoration.
 - Close the final browser during narration; verify audio stops and reopening restores state.
@@ -183,11 +199,11 @@ These behaviors were tuned after real play sessions and must be preserved:
 - **Stale narration is skipped.** A new player action or roll click calls `cancelAudio(true)`:
   in-flight TTS aborts, queued sentences drop, clients get `audio_stop`, and the narrator starts
   fresh with the new beat. Players who read faster than the narrator never wait for old audio.
-- **Scene art is quality-first.** Scene backgrounds use the same dpmpp_2m/karras 24-step sampler
-  as portraits (async, ~4 s; the LCM 6-step draft workflow was retired because people and creatures
-  rendered washed-out/glitchy). The negative prompt targets deformed faces/anatomy and washed-out
-  color. Cache keys include location name + art style + composition-prompt hash, so distinct
-  places get distinct art and a changed prompt or style regenerates automatically.
+- **Scene art is quality-first and contains no living subjects.** Scene backgrounds use the
+  dpmpp_2m/karras 24-step sampler asynchronously. Positive prompts are reduced to environment and
+  story evidence; negative prompts ban people, faces, figures, animals, and monsters. Named people
+  and creatures use dedicated 512px close-up portraits. Cache signatures are policy-versioned and
+  include location, context, art style, and composition so old bad assets regenerate automatically.
 - **Art style is a table setting** (`PublicState.artStyle`, `set_art_style` message, Settings
   drawer): `painting` (classical oils, the default), `sketch` (aged ink illustration on
   parchment, like plates from an old tome), or `cinematic`. Style prompts live in
@@ -203,7 +219,7 @@ response; verify most non-trivial attempts request a roll.
 
 The roadmap remains authoritative. The most immediate incomplete Phase 1/2 items are compact
 selectors for remaining level-1 class/spell choices, the broader SRD data import, starter scene-art
-pregeneration, an optional authored music library, and 3D dice.
+pregeneration, an optional authored music library, a persistent region graph, and 3D dice.
 Full SRD advancement and encounter mechanics are specified in `docs/08-progression-and-content.md`;
 the current narrator must never grant levels, ASIs, class features, or item mechanics through prose.
 Do not confuse these planned features with defects in the current vertical slice.

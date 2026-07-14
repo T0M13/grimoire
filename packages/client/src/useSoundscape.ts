@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { Mood, PublicState, RollResult } from "@grimoire/shared";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Mood, PublicState, RollResult, Scene } from "@grimoire/shared";
 
 export type SoundEffect = "ui" | "choice" | "scene" | "roll" | "success" | "failure" | "combat" | "event";
 
-interface MusicProfile {
+export interface MusicProfile {
   label: string;
   root: number;
   chord: readonly number[];
@@ -31,6 +31,198 @@ export const MUSIC_PROFILES: Record<Mood, MusicProfile> = {
   victory: { label: "The Road Won", root: 48, chord: [0, 4, 7, 11], scale: [0, 2, 4, 7, 9, 11], tempo: 98, pulseEvery: 2, waveform: "triangle", brightness: 1900, intensity: .85, percussion: true },
 };
 
+const variantPattern = (scale: readonly number[], movement: 1 | 2): readonly number[] => {
+  if (scale.length < 3) return scale;
+  if (movement === 1) return [scale[0]!, ...scale.slice(2), scale[1]!];
+  return [scale[0]!, ...scale.slice(1).reverse()];
+};
+
+function musicVariants(base: MusicProfile, labels: readonly [string, string]): readonly MusicProfile[] {
+  return [
+    base,
+    {
+      ...base,
+      label: labels[0],
+      root: base.root + 5,
+      scale: variantPattern(base.scale, 1),
+      tempo: Math.round(base.tempo * .94),
+      pulseEvery: Math.min(5, base.pulseEvery + 1),
+      brightness: Math.round(base.brightness * .88),
+      intensity: Math.min(1, base.intensity * .92),
+    },
+    {
+      ...base,
+      label: labels[1],
+      root: base.root - 2,
+      scale: variantPattern(base.scale, 2),
+      tempo: Math.round(base.tempo * 1.06),
+      pulseEvery: Math.max(1, base.pulseEvery - 1),
+      brightness: Math.round(base.brightness * 1.08),
+      intensity: Math.min(1, base.intensity * .96),
+    },
+  ];
+}
+
+/** Three related movements per mood. Scene identity chooses the opening movement deterministically. */
+export const MUSIC_VARIANTS: Record<Mood, readonly MusicProfile[]> = {
+  tavern: musicVariants(MUSIC_PROFILES.tavern, ["Last Lantern", "Stories By Firelight"]),
+  town: musicVariants(MUSIC_PROFILES.town, ["Lantern Market", "Streets Awakening"]),
+  travel: musicVariants(MUSIC_PROFILES.travel, ["Beyond The Milestone", "Wind At Our Backs"]),
+  forest: musicVariants(MUSIC_PROFILES.forest, ["Moss And Moonlight", "Whispers In The Boughs"]),
+  dungeon: musicVariants(MUSIC_PROFILES.dungeon, ["Forgotten Corridors", "The Deep Remembers"]),
+  night: musicVariants(MUSIC_PROFILES.night, ["Moonlit Watch", "Before The Dawn"]),
+  tension: musicVariants(MUSIC_PROFILES.tension, ["Footsteps Behind", "The Narrowing Path"]),
+  mystery: musicVariants(MUSIC_PROFILES.mystery, ["Unwritten Runes", "A Door Unanswered"]),
+  combat: musicVariants(MUSIC_PROFILES.combat, ["Steel In Motion", "No Ground Given"]),
+  boss: musicVariants(MUSIC_PROFILES.boss, ["Crown Of Dread", "The Last Threshold"]),
+  sorrow: musicVariants(MUSIC_PROFILES.sorrow, ["Names In The Ash", "What We Carry"]),
+  victory: musicVariants(MUSIC_PROFILES.victory, ["Banner At Sunrise", "Homeward With Honor"]),
+};
+
+export type SoundscapeScene = Pick<Scene, "name" | "kind" | "timeOfDay" | "weather" | "mood">;
+
+export interface SoundscapeSelection {
+  id: string;
+  sceneKey: string;
+  mood: Mood;
+  variantIndex: number;
+  movementIndex: number;
+  label: string;
+  profile: MusicProfile;
+}
+
+interface ProfileModifier {
+  root: number;
+  tempo: number;
+  brightness: number;
+  intensity: number;
+}
+
+const NEUTRAL_MODIFIER: ProfileModifier = { root: 0, tempo: 1, brightness: 1, intensity: 1 };
+const TIME_MODIFIERS: Record<Scene["timeOfDay"], ProfileModifier> = {
+  day: { root: 0, tempo: 1.02, brightness: 1.06, intensity: 1 },
+  dawn: { root: 2, tempo: .96, brightness: 1.12, intensity: .9 },
+  dusk: { root: -1, tempo: .94, brightness: .86, intensity: .88 },
+  night: { root: -3, tempo: .88, brightness: .68, intensity: .8 },
+};
+const WEATHER_MODIFIERS: Record<Scene["weather"], ProfileModifier> = {
+  clear: NEUTRAL_MODIFIER,
+  rain: { root: 0, tempo: .94, brightness: .82, intensity: .86 },
+  storm: { root: -2, tempo: 1.04, brightness: .72, intensity: 1 },
+  snow: { root: 2, tempo: .86, brightness: .76, intensity: .74 },
+  fog: { root: -2, tempo: .9, brightness: .58, intensity: .76 },
+};
+
+const kindModifier = (kind: string): ProfileModifier => {
+  const normalized = kind.toLowerCase();
+  if (/dungeon|crypt|cave|cellar|sewer|catacomb/.test(normalized))
+    return { root: -2, tempo: .94, brightness: .84, intensity: .95 };
+  if (/forest|wood|grove|swamp|wild/.test(normalized))
+    return { root: 0, tempo: .96, brightness: .9, intensity: .94 };
+  if (/tavern|inn|hearth|hall/.test(normalized))
+    return { root: 0, tempo: 1, brightness: 1.06, intensity: 1 };
+  if (/town|city|market|village/.test(normalized))
+    return { root: 0, tempo: 1.04, brightness: 1.05, intensity: .96 };
+  if (/temple|shrine|spire|cathedral|sanctum/.test(normalized))
+    return { root: 2, tempo: .94, brightness: .92, intensity: .92 };
+  return NEUTRAL_MODIFIER;
+};
+
+const clampRange = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+/** A stable, platform-independent FNV-1a hash for repeatable per-scene scoring. */
+export function stableSoundscapeHash(value: string): number {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}
+
+export function sceneSoundscapeKey(scene: SoundscapeScene): string {
+  return [scene.name, scene.kind, scene.mood, scene.timeOfDay, scene.weather]
+    .map(part => part.trim().toLowerCase().replace(/\s+/g, " "))
+    .join("|");
+}
+
+function applySceneModifiers(base: MusicProfile, scene: SoundscapeScene): MusicProfile {
+  const time = TIME_MODIFIERS[scene.timeOfDay];
+  const weather = WEATHER_MODIFIERS[scene.weather];
+  const kind = kindModifier(scene.kind);
+  let tempo = Math.round(base.tempo * time.tempo * weather.tempo * kind.tempo);
+  let brightness = Math.round(base.brightness * time.brightness * weather.brightness * kind.brightness);
+  let intensity = base.intensity * time.intensity * weather.intensity * kind.intensity;
+
+  // Context colors dramatic music without erasing its mechanical identity.
+  if (scene.mood === "combat") {
+    tempo = Math.max(112, tempo);
+    brightness = Math.max(900, brightness);
+    intensity = Math.max(.82, intensity);
+  } else if (scene.mood === "boss") {
+    tempo = Math.max(98, tempo);
+    brightness = Math.max(780, brightness);
+    intensity = Math.max(.9, intensity);
+  } else if (scene.mood === "victory") {
+    tempo = Math.max(88, tempo);
+    intensity = Math.max(.72, intensity);
+  }
+
+  return {
+    ...base,
+    root: clampRange(base.root + time.root + weather.root + kind.root, 28, 64),
+    tempo: clampRange(tempo, 38, 148),
+    brightness: clampRange(brightness, 360, 2400),
+    intensity: clampRange(intensity, .28, 1),
+  };
+}
+
+/** Selects one repeatable movement and applies audible scene/time/weather color. */
+export function selectSoundscape(scene: SoundscapeScene, movementIndex = 0): SoundscapeSelection {
+  const sceneKey = sceneSoundscapeKey(scene);
+  const variants = MUSIC_VARIANTS[scene.mood];
+  const normalizedMovement = Number.isFinite(movementIndex) ? Math.max(0, Math.trunc(movementIndex)) : 0;
+  const variantIndex = (stableSoundscapeHash(sceneKey) + normalizedMovement) % variants.length;
+  const variant = variants[variantIndex]!;
+  return {
+    id: `${sceneKey}|movement:${variantIndex}`,
+    sceneKey,
+    mood: scene.mood,
+    variantIndex,
+    movementIndex: normalizedMovement,
+    label: variant.label,
+    profile: applySceneModifiers(variant, scene),
+  };
+}
+
+export const MOVEMENT_ROTATION_MS = 150_000;
+
+/** Starts the tab-local movement clock and returns an idempotent cleanup function. */
+export function scheduleMovementRotation(advance: () => void, intervalMs = MOVEMENT_ROTATION_MS): () => void {
+  const timer = globalThis.setInterval(advance, intervalMs);
+  let active = true;
+  return () => {
+    if (!active) return;
+    active = false;
+    globalThis.clearInterval(timer);
+  };
+}
+
+export function parseStoredVolume(raw: string | null, fallback: number): number {
+  const safeFallback = Number.isFinite(fallback) ? clampRange(fallback, 0, 1) : 0;
+  if (raw === null || raw.trim() === "") return safeFallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? clampRange(parsed, 0, 1) : safeFallback;
+}
+
+const DEFAULT_SCENE: SoundscapeScene = {
+  name: "The Fireside",
+  kind: "fireside",
+  timeOfDay: "night",
+  weather: "clear",
+  mood: "mystery",
+};
+
 interface Track {
   gain: GainNode;
   nodes: AudioScheduledSourceNode[];
@@ -38,14 +230,15 @@ interface Track {
 }
 
 const frequency = (midi: number) => 440 * 2 ** ((midi - 69) / 12);
-const clamp = (value: number) => Math.min(1, Math.max(0, value));
+const normalizeVolume = (value: number, fallback: number) =>
+  Number.isFinite(value) ? clampRange(value, 0, 1) : fallback;
 
 class SoundscapeEngine {
   private context: AudioContext | null = null;
   private musicBus: GainNode | null = null;
   private effectsBus: GainNode | null = null;
   private track: Track | null = null;
-  private mood: Mood = "mystery";
+  private selection = selectSoundscape(DEFAULT_SCENE);
   private musicVolume = .32;
   private effectsVolume = .7;
   private musicMuted = false;
@@ -54,8 +247,8 @@ class SoundscapeEngine {
   private noiseBuffer: AudioBuffer | null = null;
 
   configure(settings: { musicVolume: number; effectsVolume: number; musicMuted: boolean; effectsMuted: boolean }): void {
-    this.musicVolume = clamp(settings.musicVolume);
-    this.effectsVolume = clamp(settings.effectsVolume);
+    this.musicVolume = normalizeVolume(settings.musicVolume, .32);
+    this.effectsVolume = normalizeVolume(settings.effectsVolume, .7);
     this.musicMuted = settings.musicMuted;
     this.effectsMuted = settings.effectsMuted;
     this.updateBuses();
@@ -66,19 +259,19 @@ class SoundscapeEngine {
     if (this.context?.state === "suspended") await this.context.resume();
   }
 
-  setMood(mood: Mood): void {
-    const changed = mood !== this.mood;
-    this.mood = mood;
-    if (this.context && (changed || !this.track)) this.startTrack(MUSIC_PROFILES[mood]);
+  setSoundscape(selection: SoundscapeSelection): void {
+    const changed = selection.id !== this.selection.id;
+    this.selection = selection;
+    if (this.context && (changed || !this.track)) this.startTrack(selection);
   }
 
   setMusicVolume(value: number): void {
-    this.musicVolume = clamp(value);
+    this.musicVolume = normalizeVolume(value, .32);
     this.updateBuses();
   }
 
   setEffectsVolume(value: number): void {
-    this.effectsVolume = clamp(value);
+    this.effectsVolume = normalizeVolume(value, .7);
     this.updateBuses();
   }
 
@@ -153,7 +346,7 @@ class SoundscapeEngine {
     this.effectsBus.connect(compressor);
     this.context = context;
     this.updateBuses();
-    this.startTrack(MUSIC_PROFILES[this.mood]);
+    this.startTrack(this.selection);
   }
 
   private updateBuses(): void {
@@ -163,9 +356,10 @@ class SoundscapeEngine {
     this.effectsBus?.gain.setTargetAtTime(this.effectsMuted ? 0 : this.effectsVolume, now, .025);
   }
 
-  private startTrack(profile: MusicProfile): void {
+  private startTrack(selection: SoundscapeSelection): void {
     const context = this.context;
     if (!context || !this.musicBus) return;
+    const profile = selection.profile;
     this.stopTrack(2.2);
     const now = context.currentTime;
     const trackGain = context.createGain();
@@ -202,7 +396,7 @@ class SoundscapeEngine {
       if (!this.track || this.context?.state !== "running") return;
       this.beat += 1;
       if (this.beat % profile.pulseEvery === 0) this.musicPulse(profile, trackGain);
-      if (profile.percussion) this.musicPercussion(profile, trackGain);
+      if (profile.percussion) this.musicPercussion(profile, selection.mood, trackGain);
     }, beatMs);
     this.track = { gain: trackGain, nodes, timer };
   }
@@ -240,16 +434,16 @@ class SoundscapeEngine {
     oscillator.stop(now + 1.2);
   }
 
-  private musicPercussion(profile: MusicProfile, output: AudioNode): void {
+  private musicPercussion(profile: MusicProfile, mood: Mood, output: AudioNode): void {
     const context = this.context;
     if (!context || this.musicMuted) return;
     const beatInBar = this.beat % 4;
-    if (beatInBar === 0 || (profile.label === "Battle Rhythm" && beatInBar === 2)) {
+    if (beatInBar === 0 || (mood === "combat" && beatInBar === 2)) {
       const oscillator = context.createOscillator();
       const gain = context.createGain();
       const now = context.currentTime;
       oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(profile.label === "Final Adversary" ? 72 : 88, now);
+      oscillator.frequency.setValueAtTime(mood === "boss" ? 72 : 88, now);
       oscillator.frequency.exponentialRampToValueAtTime(42, now + .16);
       gain.gain.setValueAtTime(.09 * profile.intensity, now);
       gain.gain.exponentialRampToValueAtTime(.0001, now + .24);
@@ -318,14 +512,30 @@ export function useSoundscape(state: PublicState | null, lastRoll: RollResult | 
   const engine = useRef<SoundscapeEngine | null>(null);
   if (!engine.current) engine.current = new SoundscapeEngine();
   const [musicMuted, setMusicMutedState] = useState(() => localStorage.getItem("grimoire.musicMuted") === "1");
-  const [musicVolume, setMusicVolumeState] = useState(() => Number(localStorage.getItem("grimoire.musicVolume") ?? ".32"));
+  const [musicVolume, setMusicVolumeState] = useState(() => parseStoredVolume(localStorage.getItem("grimoire.musicVolume"), .32));
   const [effectsMuted, setEffectsMutedState] = useState(() => localStorage.getItem("grimoire.effectsMuted") === "1");
-  const [effectsVolume, setEffectsVolumeState] = useState(() => Number(localStorage.getItem("grimoire.effectsVolume") ?? ".7"));
-  const mood = state?.scene.mood ?? "mystery";
+  const [effectsVolume, setEffectsVolumeState] = useState(() => parseStoredVolume(localStorage.getItem("grimoire.effectsVolume"), .7));
+  const scene: SoundscapeScene = state?.scene ?? DEFAULT_SCENE;
+  const sceneKey = sceneSoundscapeKey(scene);
+  const [movement, setMovement] = useState(() => ({ sceneKey, index: 0 }));
+  const movementIndex = movement.sceneKey === sceneKey ? movement.index : 0;
+  const selection = useMemo(() => selectSoundscape(scene, movementIndex), [sceneKey, movementIndex]);
+  const mood = scene.mood;
   const previousScene = useRef<string | undefined>(undefined);
   const previousMood = useRef<Mood | undefined>(undefined);
   const previousCheck = useRef<string | null>(null);
   const previousLogLength = useRef(0);
+
+  useEffect(() => {
+    setMovement(current => current.sceneKey === sceneKey && current.index === 0
+      ? current
+      : { sceneKey, index: 0 });
+    return scheduleMovementRotation(() => {
+      setMovement(current => current.sceneKey === sceneKey
+        ? { sceneKey, index: current.index + 1 }
+        : current);
+    });
+  }, [sceneKey]);
 
   useEffect(() => {
     engine.current?.configure({ musicMuted, musicVolume, effectsMuted, effectsVolume });
@@ -351,17 +561,16 @@ export function useSoundscape(state: PublicState | null, lastRoll: RollResult | 
   }, []);
 
   useEffect(() => {
-    engine.current?.setMood(mood);
+    engine.current?.setSoundscape(selection);
     if (previousMood.current && previousMood.current !== mood && (mood === "combat" || mood === "boss"))
       engine.current?.play("combat");
     previousMood.current = mood;
-  }, [mood]);
+  }, [selection.id, mood]);
 
   useEffect(() => {
-    const sceneName = state?.scene.name;
-    if (sceneName && previousScene.current && previousScene.current !== sceneName) engine.current?.play("scene");
-    previousScene.current = sceneName;
-  }, [state?.scene.name]);
+    if (previousScene.current && previousScene.current !== sceneKey) engine.current?.play("scene");
+    previousScene.current = sceneKey;
+  }, [sceneKey]);
 
   useEffect(() => {
     if (lastRoll) engine.current?.play(lastRoll.success ? "success" : "failure");
@@ -388,7 +597,7 @@ export function useSoundscape(state: PublicState | null, lastRoll: RollResult | 
     engine.current?.setMusicMuted(muted);
   }, []);
   const setMusicVolume = useCallback((volume: number) => {
-    const value = clamp(volume);
+    const value = normalizeVolume(volume, .32);
     setMusicVolumeState(value);
     localStorage.setItem("grimoire.musicVolume", String(value));
     engine.current?.setMusicVolume(value);
@@ -399,7 +608,7 @@ export function useSoundscape(state: PublicState | null, lastRoll: RollResult | 
     engine.current?.setEffectsMuted(muted);
   }, []);
   const setEffectsVolume = useCallback((volume: number) => {
-    const value = clamp(volume);
+    const value = normalizeVolume(volume, .7);
     setEffectsVolumeState(value);
     localStorage.setItem("grimoire.effectsVolume", String(value));
     engine.current?.setEffectsVolume(value);
@@ -409,6 +618,6 @@ export function useSoundscape(state: PublicState | null, lastRoll: RollResult | 
   return {
     musicMuted, setMusicMuted, musicVolume, setMusicVolume,
     effectsMuted, setEffectsMuted, effectsVolume, setEffectsVolume,
-    mood, trackLabel: MUSIC_PROFILES[mood].label, play,
+    mood, trackLabel: selection.label, play,
   };
 }

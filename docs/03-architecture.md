@@ -1,5 +1,12 @@
 # 03 — Architecture & Tech Stack
 
+> **Status (2026-07-14):** this document contains both the long-term architecture and early design
+> choices. The playable build currently uses a singleton plain-`ws` room with full snapshots,
+> Ollama rather than llama.cpp, SQLite JSON snapshots rather than normalized world tables, and a
+> browser-local procedural soundtrack rather than authored ACE-Step files. There is no lobby,
+> invite-code authentication, split-party activity model, or persistent world graph yet. Treat
+> `docs/05-handoff.md` as the exact implementation record.
+
 ## 1. System overview
 
 Everything runs on the host's PC. Players (including the host) connect with a browser.

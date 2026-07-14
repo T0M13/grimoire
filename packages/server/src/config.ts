@@ -44,20 +44,23 @@ export const CONFIG = {
   sceneStyles: {
     painting:
       "classical oil painting, visible expressive brushstrokes, dramatic chiaroscuro lighting, rich muted palette, " +
-      "environmental storytelling, coherent architecture, characters naturally integrated and visibly interacting, " +
+      "atmospheric environmental storytelling, coherent architecture, unoccupied architecture-and-landscape composition, " +
       "wide composition, old-master fantasy artwork, canvas texture",
     sketch:
       "aged hand-drawn ink illustration on weathered parchment, fine crosshatching and expressive linework, " +
       "sepia and faded earth tones, subtle watercolor wash accents, storybook plate from an ancient tome, " +
-      "environmental storytelling, characters naturally integrated and visibly interacting, wide composition",
+      "atmospheric environmental storytelling, unoccupied architecture-and-landscape composition, wide composition",
     cinematic:
       "cinematic storybook fantasy illustration, painterly environmental storytelling, coherent architecture, " +
-      "clear indoor or outdoor spatial context, wide cinematic composition, characters naturally integrated into " +
-      "the environment and visibly interacting, dramatic motivated lighting, consistent muted color palette, detailed concept art",
+      "clear indoor or outdoor spatial context, wide cinematic composition, unoccupied architecture-and-landscape composition, " +
+      "dramatic motivated lighting, consistent muted color palette, detailed concept art",
   } as Record<"painting" | "sketch" | "cinematic", string>,
+  // Scenes contain no living subjects by design: SD1.5 renders small faces/anatomy badly, so
+  // environments carry the story and named people/creatures get dedicated close-up portraits.
   imageNegative:
-    "photo, photorealistic, modern, empty generic landscape, unrelated scenery, floating people, character lineup, " +
-    "text, letters, sign, caption, watermark, signature, low quality, blurry, duplicate people, " +
-    "deformed face, distorted face, ugly face, cross-eyed, mutated hands, extra limbs, bad anatomy, " +
-    "washed out, faded colors, hazy, overexposed",
+    "people, person, human, figure, silhouette, face, portrait, crowd, character, hands, " +
+    "animal, creature, monster, beast, dragon, bird, horse, dog, cat, living subject, " +
+    "photo, photorealistic, modern, empty generic landscape, unrelated scenery, character lineup, " +
+    "text, letters, sign, caption, watermark, signature, low quality, blurry, " +
+    "deformed, bad anatomy, washed out, faded colors, hazy, overexposed",
 };

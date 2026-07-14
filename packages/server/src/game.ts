@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import type { WebSocket } from "ws";
 import {
-  type Character, type CheckRequest, type ClientMessage, type NarrationSpeaker,
+  npcKey, type Character, type CheckRequest, type ClientMessage, type NarrationSpeaker,
   type NpcSpeaker, type NpcVoiceProfile, type PublicState, type QuestUpdate, type ServerMessage,
 } from "@grimoire/shared";
 import {
@@ -10,7 +10,7 @@ import {
   validateCharacterChoices, type CharacterBuildChoices, type Rng,
 } from "@grimoire/rules";
 import { decideMove, narrate } from "./dm.js";
-import { generatePortrait, getSceneImage, SentenceStream, synthesize } from "./media.js";
+import { generatePortrait, getNpcPortrait, getSceneImage, sceneSignature, SentenceStream, synthesize } from "./media.js";
 import { deleteSlot, listSaves, loadCampaign, loadSlot, logEvent, saveCampaign, saveSlot } from "./db.js";
 import type { ChatMessage } from "./ollama.js";
 import { IdleShutdown } from "./lifecycle.js";
@@ -21,13 +21,34 @@ const OPENING_INSTRUCTION = (premise: string, party: string) =>
 Premise wish from the players: "${premise || "surprise us"}".
 Your move MUST be "change_scene" - invent an evocative opening location where the adventure hooks the party immediately.
 Also start one concise main quest for that hook using the structured "quest" field.
-The scene image must visibly include the location and the NPC, creature, or event delivering that hook.`;
+List every named non-player person or creature currently visible in scene.occupants; never include
+party members there. The scene image must show the location itself and physical evidence of that
+hook - never living subjects.`;
 
 function hydrateState(state: PublicState): PublicState {
   state.quests ??= [];
   state.npcVoices ??= {};
   state.pendingNpc ??= null;
   state.artStyle ??= "painting";
+  state.scene.occupants ??= [];
+  const hydrateSubject = (subject: NpcSpeaker) => {
+    subject.entityType ??= "person";
+    subject.appearance ||= subject.entityType === "creature"
+      ? "distinctive fantasy creature with a recognizable silhouette"
+      : "distinctive fantasy local in practical clothing";
+  };
+  for (const occupant of state.scene.occupants) hydrateSubject(occupant);
+  if (state.pendingNpc) hydrateSubject(state.pendingNpc);
+  for (const [key, profile] of Object.entries(state.npcVoices)) {
+    hydrateSubject(profile);
+    profile.portraitUrls ??= profile.portraitUrl
+      ? { [state.artStyle]: profile.portraitUrl }
+      : {};
+    if (key !== npcKey(profile.name)) {
+      state.npcVoices[npcKey(profile.name)] ??= profile;
+      delete state.npcVoices[key];
+    }
+  }
   return state;
 }
 
@@ -42,6 +63,7 @@ function defaultState(): PublicState {
       mood: "mystery",
       description: "Embers crackle. Your tale has not yet begun.",
       exits: [],
+      occupants: [],
       imagePrompt: "cozy stone hearth with a crackling warm fire, worn leather armchairs, thick blankets, steaming mugs on a small wooden table, book-lined walls, soft golden firelight, gentle snowy night visible through a small window, inviting and peaceful",
       imageUrl: null,
     },
@@ -85,6 +107,7 @@ export class GameRoom {
     this.state.narratorVoice ??= "male"; // older saves may predate this field
     this.state.saves = listSaves();
     this.refreshSceneImage();
+    this.refreshVisiblePortraits();
   }
 
   // ---------- connection lifecycle ----------
@@ -124,6 +147,7 @@ export class GameRoom {
         this.state.artStyle = msg.style;
         this.state.scene.imageUrl = null;
         this.refreshSceneImage(); // repaint the current scene in the chosen style
+        this.refreshVisiblePortraits();
         this.persist();
         this.broadcastState();
         return;
@@ -155,6 +179,7 @@ export class GameRoom {
     this.persist();
     this.cancelAudio(true);
     this.refreshSceneImage(); // repaint if the loaded scene's art is missing
+    this.refreshVisiblePortraits();
     this.broadcastState();
   }
 
@@ -162,8 +187,10 @@ export class GameRoom {
     if (this.state.dmBusy)
       return this.send(ws, { type: "error", message: "Wait for the storyteller to finish." });
     const voice = this.state.narratorVoice;
+    const artStyle = this.state.artStyle;
     this.state = defaultState();
     this.state.narratorVoice = voice;
+    this.state.artStyle = artStyle;
     this.state.saves = listSaves();
     this.history = [];
     this.persist();
@@ -276,7 +303,8 @@ to choose Act next. Do not put the answer in quotation marks.`,
 
       const modeInstruction = mode === "speak"
         ? `\nINTERACTION MODE: SPEAK. The player is deliberately addressing an NPC. Fill "npc" with
-the responding NPC's stable name, sex, and a few personality adjectives. Let the NPC answer
+the responding subject's stable name, voice-family sex, person/creature type, a concrete physical
+appearance, and a few personality adjectives. Reuse known appearance exactly. Let the NPC answer
 substantively unless refusal is an intentional character choice; even a refusal should expose a
 motive, boundary, clue, or next conversational opening. Ordinary conversation needs no roll, but
 attempts to persuade, deceive, intimidate, or perform under meaningful stakes should request the
@@ -293,7 +321,12 @@ appropriate check.`
       if (move.move === "request_check" && move.check) {
         const request = checkRequestFromIntent(move.check);
         this.state.pendingCheck = request;
-        this.state.pendingNpc = mode === "speak" ? move.npc ?? null : null;
+        if (mode === "speak" && move.npc) {
+          const profile = this.npcVoice(move.npc);
+          this.state.pendingNpc = profile;
+        } else {
+          this.state.pendingNpc = null;
+        }
         instruction = `ENGINE: ${request.playerName} must attempt a ${request.skill} check (${request.reason}). Narrate a brief, tense lead-in (1-2 sentences) that ends at the moment of uncertainty. Do NOT reveal any outcome.`;
       } else if (move.move === "change_scene" && move.scene) {
         this.applyScene(move.scene);
@@ -316,6 +349,8 @@ Do not add storyteller narration, headings, or quotation marks. Do not speak or 
           speaker: { kind: "npc", name: profile.name }, voice: profile.voice, logKind: "npc",
         };
       }
+
+      if (move.npc) this.broadcastState(); // show the portrait placeholder while dialogue streams
 
       const narration = await this.narrateAndSpeak(instruction, player, presentation);
       if (move.move === "change_scene") this.state.scene.description = narration.slice(0, 500);
@@ -387,9 +422,11 @@ sentences, no headings, narration, quotation marks, or player dialogue.`,
 
     const party = this.state.party;
     const voice = this.state.narratorVoice;
+    const artStyle = this.state.artStyle;
     this.state = defaultState();
     this.state.party = party;
     this.state.narratorVoice = voice;
+    this.state.artStyle = artStyle;
     this.state.saves = listSaves();
     this.history = [];
     this.setBusy(true);
@@ -405,6 +442,7 @@ sentences, no headings, narration, quotation marks, or player dialogue.`,
           : {
               name: "The Crossroads", kind: "crossroads", timeOfDay: "dusk", weather: "clear",
               mood: "travel", exits: ["the road north", "the road south"],
+              occupants: [],
               imagePrompt: "lonely crossroads at dusk with an old wooden signpost, rolling hills, long shadows",
             },
       );
@@ -493,18 +531,38 @@ sentences, no headings, narration, quotation marks, or player dialogue.`,
   }
 
   private applyScene(scene: NonNullable<import("@grimoire/shared").DmMove["scene"]>): void {
+    const partyNames = new Set(this.state.party.map(character => npcKey(character.name)));
     this.state.scene = {
       ...scene,
+      occupants: (scene.occupants ?? []).filter(subject => !partyNames.has(npcKey(subject.name))),
       description: "",
       imageUrl: null,
     };
+    // Queue the wide establishing image first; subject portraits follow without delaying it.
     this.refreshSceneImage();
+    this.state.scene.occupants = this.state.scene.occupants.map(occupant => {
+      const profile = this.npcVoice(occupant, false);
+      return {
+        name: profile.name, sex: profile.sex, entityType: profile.entityType,
+        personality: profile.personality, appearance: profile.appearance,
+      };
+    });
   }
 
-  private npcVoice(npc: NpcSpeaker): NpcVoiceProfile {
-    const key = npc.name.trim().toLowerCase();
+  private npcVoice(npc: NpcSpeaker, markVisible = true): NpcVoiceProfile {
+    const key = npcKey(npc.name);
     const existing = this.state.npcVoices[key];
-    if (existing) return existing;
+    if (existing) {
+      if (existing.appearance.startsWith("distinctive fantasy") && npc.appearance.trim()) {
+        existing.appearance = npc.appearance.trim();
+        existing.portraitUrl = null;
+        existing.portraitUrls = {};
+      }
+      existing.entityType ??= npc.entityType;
+      if (markVisible) this.markNpcVisible(existing);
+      this.ensureNpcPortrait(existing);
+      return existing;
+    }
     const voices = CONFIG.npcVoices[npc.sex];
     const personality = npc.personality.toLowerCase();
     let index: number;
@@ -513,9 +571,60 @@ sentences, no headings, narration, quotation marks, or player dialogue.`,
     else if (/playful|sly|quick|young|mischievous|cheerful/.test(personality)) index = 2;
     else if (/formal|cold|reserved|solemn|precise|noble/.test(personality)) index = 3;
     else index = crypto.createHash("sha256").update(key).digest()[0]! % voices.length;
-    const profile: NpcVoiceProfile = { ...npc, name: npc.name.trim(), voice: voices[index % voices.length]! };
+    const profile: NpcVoiceProfile = {
+      ...npc,
+      name: npc.name.trim(),
+      appearance: npc.appearance.trim(),
+      voice: voices[index % voices.length]!,
+      portraitUrl: null,
+      portraitUrls: {},
+    };
     this.state.npcVoices[key] = profile;
+    if (markVisible) this.markNpcVisible(profile);
+    this.ensureNpcPortrait(profile);
     return profile;
+  }
+
+  private markNpcVisible(npc: NpcSpeaker): void {
+    const key = npcKey(npc.name);
+    const index = this.state.scene.occupants.findIndex(candidate => npcKey(candidate.name) === key);
+    const visible: NpcSpeaker = {
+      name: npc.name.trim(), sex: npc.sex, entityType: npc.entityType,
+      personality: npc.personality, appearance: npc.appearance,
+    };
+    if (index === -1) {
+      if (this.state.scene.occupants.length >= 8) this.state.scene.occupants.shift();
+      this.state.scene.occupants.push(visible);
+    }
+    else this.state.scene.occupants[index] = visible;
+  }
+
+  private refreshVisiblePortraits(): void {
+    for (const occupant of this.state.scene.occupants) this.npcVoice(occupant, false);
+  }
+
+  private ensureNpcPortrait(profile: NpcVoiceProfile): void {
+    const style = this.state.artStyle ?? "painting";
+    profile.portraitUrls ??= {};
+    const ready = profile.portraitUrls[style];
+    if (ready) {
+      profile.portraitUrl = ready;
+      return;
+    }
+    const expectedKey = npcKey(profile.name);
+    const expectedAppearance = profile.appearance;
+    const { cached, pending } = getNpcPortrait(profile, style);
+    const apply = (url: string) => {
+      const current = this.state.npcVoices[expectedKey];
+      if (!current || current.appearance !== expectedAppearance || this.state.artStyle !== style) return;
+      current.portraitUrls ??= {};
+      current.portraitUrls[style] = url;
+      current.portraitUrl = url;
+      this.persist();
+      this.broadcastState();
+    };
+    if (cached) apply(cached);
+    else pending?.then(apply).catch(err => console.warn("[npc portrait failed]", (err as Error).message));
   }
 
   private applyQuestUpdate(update: QuestUpdate): void {
@@ -547,7 +656,7 @@ sentences, no headings, narration, quotation marks, or player dialogue.`,
   private refreshSceneImage(): void {
     const scene = this.state.scene;
     const artStyle = this.state.artStyle ?? "painting";
-    const signature = `${scene.name}|${scene.imagePrompt}|${artStyle}`;
+    const signature = sceneSignature(scene, artStyle);
     if (this.paintingScene === signature) return; // already painting this exact scene
     const { cached, pending } = getSceneImage(scene, artStyle);
     if (cached) {
@@ -559,7 +668,7 @@ sentences, no headings, narration, quotation marks, or player dialogue.`,
         .finally(() => { if (this.paintingScene === signature) this.paintingScene = null; })
         .then(url => {
           // only apply if we're still in the same scene by the time the paint dries
-          if (this.state.scene.name === scene.name) {
+          if (sceneSignature(this.state.scene, this.state.artStyle ?? "painting") === signature) {
             this.state.scene.imageUrl = url;
             this.broadcast({ type: "scene_image", url });
             this.persist();
