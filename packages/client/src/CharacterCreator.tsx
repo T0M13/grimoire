@@ -83,7 +83,13 @@ function skillDefaults(raceId: string, classId: string, backgroundId: string) {
   };
 }
 
-export default function CharacterCreator({ onJoin, connected }: { onJoin: (payload: JoinPayload) => void; connected: boolean }) {
+export default function CharacterCreator({
+  onJoin, connected, onBack,
+}: {
+  onJoin: (payload: JoinPayload) => void;
+  connected: boolean;
+  onBack?: () => void;
+}) {
   const defaults = skillDefaults("human", "fighter", "acolyte");
   const [tab, setTab] = useState(0);
   const [sex, setSex] = useState<"male" | "female">("male");
@@ -221,6 +227,10 @@ export default function CharacterCreator({ onJoin, connected }: { onJoin: (paylo
         alignment, personalityTraits, ideal, bond, flaw, languages, equipmentPackageId,
       });
     }}>
+      {onBack && <button type="button" onClick={onBack}
+        className="mb-3 rounded-lg border border-stone-800 px-3 py-1.5 text-xs text-stone-500 hover:border-stone-600 hover:text-stone-300">
+        Back To Journeys
+      </button>}
       <h1 className="narration text-5xl text-amber-100/90 tracking-wide text-center mb-1">Grimoire</h1>
       <p className="text-sm text-stone-400 text-center mb-4">Create A Level 1 Hero · 2014 SRD Rules</p>
       <button type="button" onClick={randomizeEverything} className="w-full rounded-xl border border-stone-700 text-stone-300 hover:border-amber-600/60 hover:text-amber-200 py-2 text-sm transition mb-4">Randomize Everything</button>

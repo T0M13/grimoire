@@ -54,8 +54,9 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
   ComfyUI async queue + cache-by-scene-signature, Kokoro sentence streaming via
   `SentenceStream` with early first-clause emit), SQLite write-through (`db.ts`),
   config in `config.ts` (ports, models, style prompts).
-- `packages/client` — React/Vite/Tailwind v4. One screen: join → story. `CharacterCreator.tsx`
-  owns the compact guided SRD flow; `useGame.ts` owns the
+- `packages/client` — React/Vite/Tailwind v4. Flow: journey chooser → character creator → shared
+  story. `JourneyGate.tsx` owns New/Load/Join Current entry; `CharacterCreator.tsx` owns the compact
+  guided SRD flow; `useGame.ts` owns the
   socket, reconnection, and the sequential narration-audio queue. `useSoundscape.ts` owns the
   tab-local Web Audio music/SFX graph, mood crossfades, cue routing, and persisted controls.
   `App.tsx` includes SRD point-buy
@@ -95,9 +96,11 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
   NPC conversational response (or a social check with a later response), and `Ask DM` answers
   directly without advancing time or silently performing an action.
 - Preserve the pacing contract (docs/05-handoff.md, "Pacing and presentation contract"): stated
-  movement executes as `change_scene` that beat, beats stay 1-3 sentences, move selection biases
-  toward `request_check`, new player turns cancel stale narration audio (`cancelAudio(true)` +
-  `audio_stop`), and scene art uses the quality dpmpp_2m workflow, never the LCM draft sampler.
+  movement executes as `change_scene` that beat, beats stay 1-3 sentences, and exploration/needed
+  clues are free. Request a check only for real opposition, danger, or time pressure with an
+  interesting failure; never reroll the same failed attempt. New player turns cancel stale
+  narration audio (`cancelAudio(true)` + `audio_stop`), and scene art uses the quality dpmpp_2m
+  workflow, never the LCM draft sampler.
 - Keep establishing scene art free of every living subject. Put named people and creatures in
   `Scene.occupants`; generate their close-up portraits asynchronously with look/type/style in the
   cache signature; render `?` until ready. Never put a tiny face back into a wide SD1.5 scene.
@@ -117,8 +120,11 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
 - The shipped Map is a current-scene projection only. Do not call exit strings a persistent scene
   graph. Stable location/exit IDs and topology belong to the server-owned Phase 3 world model.
 - Today's multiplayer is one sequential public room: one scene, global `dmBusy`/pending roll,
-  name-only reconnect, and table-wide narration/audio. Test two heroes with isolated browser
-  profiles; never claim private dialogue, split parties, host authorization, or six-seat enforcement.
+  name-only reconnect, and table-wide narration/audio. `party_presence` is transient (never saved)
+  and shows Ready/Acting/Speaking/Asking DM/Rolling/Following/Offline while the saved `party` remains
+  the full roster. Active-table load/reset requires a joined hero, but there is no host role yet.
+  Test two heroes with isolated browser profiles; never claim private dialogue,
+  personal quest visibility, parallel actions, split parties, host authorization, or seat limits.
 - Asset cache keys include location name/kind/time/weather/mood plus a hash of the composition
   prompt, joined with `--`, lowercase alnum+dash only (Windows-safe filenames).
 - Narration for an active character must be second-person (`you/your`), never their own name or

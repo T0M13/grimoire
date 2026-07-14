@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CheckRequest, ClientMessage, NarrationSpeaker, PublicState, RollResult, ServerMessage } from "@grimoire/shared";
+import type {
+  CheckRequest, ClientMessage, NarrationSpeaker, PartyPresence, PublicState, RollResult, ServerMessage,
+} from "@grimoire/shared";
+import { readPlayerIdentity, writePlayerIdentity } from "./playerIdentity";
 
 const GAME_ORIGIN = new URL(
   (import.meta.env.VITE_GAME_ORIGIN as string | undefined)
@@ -16,12 +19,15 @@ function gameSocketUrl(): string {
 export interface GameConnection {
   connected: boolean;
   state: PublicState | null;
+  partyPresence: PartyPresence[];
+  journeyReady: { action: "new" | "load"; saveId?: number; nonce: number } | null;
   /** narration currently streaming in (not yet in state.log) */
   liveNarration: string | null;
   liveSpeaker: NarrationSpeaker | null;
   lastRoll: RollResult | null;
   pendingCheck: CheckRequest | null;
   errorFlash: string | null;
+  errorNonce: number;
   audio: {
     muted: boolean;
     setMuted: (m: boolean) => void;
@@ -37,10 +43,13 @@ export interface GameConnection {
 export function useGame(): GameConnection {
   const [connected, setConnected] = useState(false);
   const [state, setState] = useState<PublicState | null>(null);
+  const [partyPresence, setPartyPresence] = useState<PartyPresence[]>([]);
+  const [journeyReady, setJourneyReady] = useState<GameConnection["journeyReady"]>(null);
   const [liveNarration, setLiveNarration] = useState<string | null>(null);
   const [liveSpeaker, setLiveSpeaker] = useState<NarrationSpeaker | null>(null);
   const [lastRoll, setLastRoll] = useState<RollResult | null>(null);
   const [errorFlash, setErrorFlash] = useState<string | null>(null);
+  const [errorNonce, setErrorNonce] = useState(0);
 
   // ---- narration audio: sequential queue with mute / volume / pause ----
   const [muted, setMutedState] = useState(() => localStorage.getItem("grimoire.muted") === "1");
@@ -49,7 +58,7 @@ export function useGame(): GameConnection {
   const [speaking, setSpeaking] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const rejoined = useRef(false);
+  const joinedSocketRef = useRef<WebSocket | null>(null);
   const queue = useRef<string[]>([]);
   const current = useRef<HTMLAudioElement | null>(null);
   const mutedRef = useRef(muted);
@@ -138,7 +147,9 @@ export function useGame(): GameConnection {
         setConnected(true);
       };
       ws.onclose = () => {
+        if (joinedSocketRef.current === ws) joinedSocketRef.current = null;
         setConnected(false);
+        setPartyPresence([]);
         stopAudio();
         if (alive) setTimeout(connect, Math.min(500 * 2 ** retry++, 8000));
       };
@@ -148,18 +159,29 @@ export function useGame(): GameConnection {
           case "state": {
             // seamless rejoin after refresh - but only if our character still exists
             // in this campaign (a reset campaign should show the join screen again)
-            const saved = localStorage.getItem("grimoire.player");
-            if (saved) {
-              const identity = JSON.parse(saved) as { playerName: string };
+            const identity = readPlayerIdentity();
+            if (identity) {
               const known = msg.state.party.some(c => c.name.toLowerCase() === identity.playerName.toLowerCase());
-              if (known && !rejoined.current) {
-                rejoined.current = true;
+              if (known && joinedSocketRef.current !== ws) {
+                joinedSocketRef.current = ws;
                 wsRef.current?.send(JSON.stringify({ type: "join", ...identity }));
+              } else if (!known && joinedSocketRef.current === ws) {
+                // A table-wide reset/load may remove this hero. Allow a later load or
+                // replacement socket to attach the remembered identity again.
+                joinedSocketRef.current = null;
               }
             }
             setState(msg.state);
             break;
           }
+          case "party_presence": setPartyPresence(msg.members); break;
+          case "journey_ready":
+            setJourneyReady(previous => ({
+              action: msg.action,
+              ...(msg.saveId === undefined ? {} : { saveId: msg.saveId }),
+              nonce: (previous?.nonce ?? 0) + 1,
+            }));
+            break;
           case "narration_start":
             setLiveSpeaker(msg.speaker);
             setLiveNarration("");
@@ -181,6 +203,7 @@ export function useGame(): GameConnection {
           case "roll_request": break; // arrives via state.pendingCheck too
           case "error":
             setErrorFlash(msg.message);
+            setErrorNonce(value => value + 1);
             setTimeout(() => setErrorFlash(null), 3000);
             break;
         }
@@ -200,15 +223,16 @@ export function useGame(): GameConnection {
   const send = useCallback((msg: ClientMessage) => {
     if (msg.type === "join") {
       const { type: _t, ...identity } = msg;
-      localStorage.setItem("grimoire.player", JSON.stringify(identity));
+      writePlayerIdentity(identity);
+      joinedSocketRef.current = wsRef.current;
     }
     wsRef.current?.send(JSON.stringify(msg));
   }, []);
 
   return {
-    connected, state, liveNarration, liveSpeaker, lastRoll,
+    connected, state, partyPresence, journeyReady, liveNarration, liveSpeaker, lastRoll,
     pendingCheck: state?.pendingCheck ?? null,
-    errorFlash,
+    errorFlash, errorNonce,
     audio: { muted, setMuted, volume, setVolume, paused, togglePause, speaking },
     send,
   };

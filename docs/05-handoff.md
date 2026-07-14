@@ -21,10 +21,29 @@ results, combat, and system events.
 The game supports multiple browser clients on one authoritative, sequential WebSocket room. It is
 not yet the Phase 3 lobby/activity system: there is one shared location, one global DM lock, public
 dialogue/audio, name-only reconnect identity, and no host authorization or private conversations.
+The saved party roster now has separate transient online/activity presence, so every tab can see
+who is Ready, Acting, Speaking, Asking DM, Rolling, Following, or Offline. This does not make actions
+parallel: the first accepted action still owns the shared Storyteller beat until it resolves.
+
+### How the current co-op room plays
+
+- Outside combat there is no round-robin turn order. Any joined player may submit when `dmBusy` is
+  false; the first accepted intent resolves completely before another can begin.
+- Every tab receives the same authoritative scene, log, quests, streamed narration, NPC dialogue,
+  images, dice results, and table voice. Actor-relative narration calls the acting hero "you", but
+  that same rendered text/audio is currently broadcast to everyone.
+- A pending check pauses the room and only the named hero may roll.
+- Main and side quests are currently party-shared. Personal side quests, private conversations,
+  per-player locations, and non-conflicting parallel activities remain the next multiplayer slice
+  described in `docs/06-open-world-multiplayer.md`.
 
 ## Implemented features
 
 - React/Vite/Tailwind client with reconnect-safe identity in browser local storage.
+- Pre-character journey gate with New Journey, Load Saved Journey, and a multiplayer-safe Join
+  Current Journey path. New/load operations are table-wide, confirmed in the UI, and acknowledged
+  by the server before character creation opens. An unjoined socket may replace only a pristine
+  table; once a journey is active, a joined party member must use Settings.
 - `CharacterCreator.tsx`: compact Race → Class → Abilities → Details → Equipment → Review tabs.
 - All twelve SRD classes and nine races, SRD lineages, three ability methods, class/racial/background
   skills, languages, traits, level-1 features/default spells, legal equipment packages, and derived
@@ -36,6 +55,9 @@ dialogue/audio, name-only reconnect identity, and no host authorization or priva
 - Plain-language narration uses short direct sentences, few modifiers, and no decorative metaphors.
 - Clickable party badges and a character-sheet dock for every party member. Map, Quests, and
   Settings use the same non-modal dock while the action composer remains usable.
+- Live party presence is a transient WebSocket feed rather than save data. A new hero joining enters
+  the shared system log; reconnect/offline churn does not pollute saves. Multiple tabs attached to
+  one hero count as one online player.
 - Constrained two-pass AI DM: structured move selection, then streamed narration.
 - Deterministic rules engine for dice, skill checks, damage, and healing; ability checks correctly
   do not auto-succeed/fail on natural 20/1. The model chooses a named difficulty category and code
@@ -168,6 +190,9 @@ creature asset under `var/assets/img/` without touching the active campaign.
 
 Current manual regression checklist:
 
+- With browser identity cleared, confirm the journey chooser appears before character creation.
+  Test New Journey, Load Saved Journey, Back To Journeys, and Join Current Journey from a second
+  isolated browser without resetting the active table.
 - Visit every creator tab, randomize a character, review the level-1 sheet, join, see `?`, then see
   the generated portrait.
 - Open your own and another party member's sheet, then type and submit with the dock still open.
@@ -185,7 +210,10 @@ Current manual regression checklist:
 - Confirm freshly painted scenes contain no people, faces, animals, or monsters, including an old
   save whose stored image prompt mentioned a figure. Open Map and exercise every current exit.
 - Multiplayer: use two isolated browser profiles, join two different heroes, verify both converge
-  on the same party/scene, only the named hero can roll, and one tab closing leaves the other alive.
+  on the same party/scene, both see new-character join events, and party badges show Acting versus
+  Following in both tabs. Confirm Offline/Online transitions do not add story-log entries, only the
+  named hero can roll, and one tab closing leaves the other alive. Open two tabs for one hero and
+  confirm closing only one does not mark that hero Offline.
 - Open Quests and verify the opening main quest; inspect duplicate inventory item grouping/icons.
 - Create a named save, start a new game, load the save, and verify hero/story/voice restoration.
 - Close the final browser during narration; verify audio stops and reopening restores state.
@@ -205,9 +233,16 @@ These behaviors were tuned after real play sessions and must be preserved:
   with a verb that says exactly what to do; summary = one plain sentence of why. Enforced in the
   move-instruction prompt and mirrored by the hardcoded opening-quest fallback ("The First Clue").
   Abstract phrasing like "investigate the immediate hook" is explicitly banned.
-- **Rolls are the heartbeat.** The move-selection prompt biases toward `request_check` for any
-  real attempt (including crossing thresholds like portals); check outcomes are allowed to bend
-  the story. Only conversation, obvious facts, automatic tasks, and impossible attempts skip rolls.
+- **Rolls are for gambles, exploration is free (rebalanced 2026-07-14 after playtests).**
+  A check needs real opposition/danger/time pressure AND an interesting failure. Looking,
+  listening, reading, examining pointed-at objects, and searching safe places never roll; clues
+  needed for story progress are given freely. No re-rolling the same failed attempt. Check
+  outcomes may bend the story.
+- **Openings are seeded.** `onNewCampaign` rolls a random place/threat/hidden-twist seed
+  (SEED_PLACES/THREATS/TWISTS in game.ts) unless players give a premise, and bans the model's
+  pet cliches (whispers, market stalls, hooded strangers). Player-voiced feature wishes live in
+  `docs/11-ideas-backlog.md` (click-to-talk private dialogues, clickable scene items, autosaves,
+  per-player async progression).
 - **Stale narration is skipped.** A new player action or roll click calls `cancelAudio(true)`:
   in-flight TTS aborts, queued sentences drop, clients get `audio_stop`, and the narrator starts
   fresh with the new beat. Players who read faster than the narrator never wait for old audio.

@@ -343,6 +343,8 @@ export type PortraitRequest = z.infer<typeof PortraitRequestSchema>;
 /** Server -> client (broadcast) */
 export type ServerMessage =
   | { type: "state"; state: PublicState }
+  | { type: "party_presence"; members: PartyPresence[] }
+  | { type: "journey_ready"; action: "new" | "load"; saveId?: number }
   | { type: "narration_start"; speaker: NarrationSpeaker }
   | { type: "narration_chunk"; text: string }
   | { type: "narration_end" }
@@ -362,6 +364,25 @@ export interface LogEntry {
 export interface NarrationSpeaker {
   kind: "dm" | "npc";
   name: string;
+}
+
+/** Transient room presence. It is broadcast live and never stored in campaign saves. */
+export type PartyActivity =
+  | "ready"
+  | "acting"
+  | "speaking"
+  | "asking_dm"
+  | "starting_journey"
+  | "waiting_for_roll"
+  | "resolving_roll"
+  | "following";
+
+export interface PartyPresence {
+  characterId: string;
+  playerName: string;
+  online: boolean;
+  activity: PartyActivity;
+  detail?: string;
 }
 
 export interface Quest {

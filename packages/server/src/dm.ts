@@ -174,13 +174,14 @@ export function buildMessages(
 }
 
 const MOVE_INSTRUCTION = `ENGINE: Choose your next DM move for the situation above. Respond ONLY with the JSON object.
-- "request_check": the player is ATTEMPTING something - climbing, sneaking, forcing, persuading,
-  deceiving, searching, recalling lore, noticing danger, crossing a threshold like a portal, or
-  anything else where an ability could matter and failure would cost something. PREFER this move:
-  when torn between narrate and request_check, request the check - rolls are the heartbeat of the
-  game and their outcomes may bend the story. Fill "check" with a difficulty category; never
-  calculate or output a numerical DC. Skip rolls only for ordinary conversation, obvious facts,
-  truly automatic tasks, and impossible attempts.
+- "request_check": ONLY for a real gamble - the attempt must have (1) genuine opposition, danger,
+  or time pressure AND (2) an interesting consequence on failure. Climbing a crumbling wall while
+  guards approach: roll. Persuading a hostile jailer: roll. Sneaking past a sentry: roll.
+  EXPLORATION IS FREE: looking around, listening, reading, examining an object the story just
+  pointed at, searching a room with no danger, opening an ordinary door - just narrate what they
+  find, no roll. If a player needs a piece of information for the story to move, GIVE it to them.
+  Never ask to re-roll the same failed attempt; the failure already changed the situation.
+  Fill "check" with a difficulty category; never calculate or output a numerical DC.
 - "change_scene": MOVEMENT IS SACRED. If the last player action states or implies going somewhere
   (enter, leave, go through, step in, follow, travel, descend, flee), you MUST choose change_scene
   NOW and put them in the new place - never answer movement with more description of the current

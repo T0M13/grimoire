@@ -6,11 +6,13 @@ import {
 import {
   npcKey, SKILL_ABILITY, SKILLS, ABILITIES,
   type Ability, type AbilityScores, type ArtStyle, type Character, type NarrationSpeaker,
-  type NpcSpeaker, type NpcVoiceProfile, type Quest, type Scene, type Skill,
+  type NpcSpeaker, type NpcVoiceProfile, type PartyPresence, type Quest, type Scene, type Skill,
 } from "@grimoire/shared";
 import { assetUrl, useGame } from "./useGame";
 import { useSoundscape, type SoundscapeControls } from "./useSoundscape";
 import CharacterCreator from "./CharacterCreator";
+import JourneyGate, { type PendingJourney } from "./JourneyGate";
+import { readPlayerIdentity } from "./playerIdentity";
 
 const mod = (score: number) => Math.floor((score - 10) / 2);
 const fmtMod = (m: number) => (m >= 0 ? `+${m}` : `${m}`);
@@ -26,13 +28,60 @@ const CLASSES = [
 export default function App() {
   const game = useGame();
   const sound = useSoundscape(game.state, game.lastRoll);
-  const me = localStorage.getItem("grimoire.player");
-  const myName: string | null = me ? (JSON.parse(me).playerName as string) : null;
+  const [entryStep, setEntryStep] = useState<"choose" | "creating">("choose");
+  const [pendingJourney, setPendingJourney] = useState<
+    (PendingJourney & { afterNonce: number; afterErrorNonce: number }) | null
+  >(null);
+  const identity = readPlayerIdentity();
+  const myName = identity?.playerName ?? null;
   // case-insensitive: the server matches names case-insensitively on reattach
   const joined = !!game.state?.party.some(c => c.name.toLowerCase() === myName?.toLowerCase());
 
+  useEffect(() => {
+    const ready = game.journeyReady;
+    if (!ready || !pendingJourney || ready.nonce <= pendingJourney.afterNonce) return;
+    const sameJourney = ready.action === pendingJourney.action
+      && (ready.action !== "load" || ready.saveId === pendingJourney.saveId);
+    if (!sameJourney) return;
+    setPendingJourney(null);
+    setEntryStep("creating");
+  }, [game.journeyReady, pendingJourney]);
+
+  useEffect(() => {
+    if (pendingJourney && (!game.connected || game.errorNonce > pendingJourney.afterErrorNonce))
+      setPendingJourney(null);
+  }, [game.connected, game.errorNonce, pendingJourney]);
+
   if (!game.state) return <Center><Embers text="Reaching the storyteller" /></Center>;
-  if (!joined) return <CharacterCreator onJoin={p => game.send({ type: "join", ...p })} connected={game.connected} />;
+  if (!joined && entryStep === "choose") return <JourneyGate
+    state={game.state}
+    connected={game.connected}
+    pending={pendingJourney}
+    error={game.errorFlash}
+    onJoinCurrent={() => setEntryStep("creating")}
+    onNewJourney={() => {
+      setPendingJourney({
+        action: "new",
+        afterNonce: game.journeyReady?.nonce ?? 0,
+        afterErrorNonce: game.errorNonce,
+      });
+      game.send({ type: "new_game" });
+    }}
+    onLoadJourney={save => {
+      setPendingJourney({
+        action: "load",
+        saveId: save.id,
+        afterNonce: game.journeyReady?.nonce ?? 0,
+        afterErrorNonce: game.errorNonce,
+      });
+      game.send({ type: "load_slot", id: save.id });
+    }}
+  />;
+  if (!joined) return <CharacterCreator
+    onJoin={p => game.send({ type: "join", ...p })}
+    connected={game.connected}
+    onBack={() => setEntryStep("choose")}
+  />;
   return <GameScreen {...{ game, myName: myName!, sound }} />;
 }
 
@@ -318,12 +367,16 @@ function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>;
       {openPanel?.kind === "settings" && <SettingsPanel game={game} sound={sound} onClose={() => setOpenPanel(null)} />}
 
       {/* party rail */}
-      <div className="absolute left-4 bottom-40 md:bottom-32 flex flex-col gap-2">
+      <aside aria-label="Party" className="absolute left-4 bottom-40 z-10 flex max-w-[calc(100vw-2rem)] flex-col gap-2 md:bottom-32">
+        <div className="px-1 text-[10px] uppercase tracking-[0.2em] text-stone-400/80">
+          Party · {game.partyPresence.filter(member => member.online).length}/{state.party.length} Online
+        </div>
         {state.party.map(c => (
           <PartyBadge key={c.id} c={c} me={c.name.toLowerCase() === myName.toLowerCase()}
+            presence={game.partyPresence.find(member => member.characterId === c.id)}
             onClick={() => togglePanel({ kind: "sheet", characterId: c.id })} />
         ))}
-      </div>
+      </aside>
 
       {!notStarted && state.scene.occupants.length > 0 && (
         <SceneCast occupants={state.scene.occupants} profiles={state.npcVoices} artStyle={state.artStyle} />
@@ -347,7 +400,9 @@ function GameScreen({ game, myName, sound }: { game: ReturnType<typeof useGame>;
       )}
 
       {/* bottom: narration + input */}
-      <div className={`absolute bottom-0 inset-x-0 z-10 px-4 pb-4 flex flex-col items-center gap-3 transition-[padding] duration-300 ${panelOpen ? "md:pr-[25.5rem]" : ""}`}>
+      {/* story column stays viewport-centered; only screens too narrow to fit both
+          chat and the docked panel shift it so the panel never covers the input */}
+      <div className={`absolute bottom-0 inset-x-0 z-10 px-4 pb-4 flex flex-col items-center gap-3 transition-[padding] duration-300 ${panelOpen ? "md:pr-[25.5rem] 2xl:pr-0" : ""}`}>
         <Narration state={state} live={game.liveNarration} liveSpeaker={game.liveSpeaker} />
 
         {myCheck && !state.dmBusy ? (
@@ -536,18 +591,35 @@ function Avatar({ c, className }: { c: Character; className: string }) {
   );
 }
 
-function PartyBadge({ c, me, onClick }: { c: Character; me: boolean; onClick: () => void }) {
+function PartyBadge({ c, me, presence, onClick }: { c: Character; me: boolean; presence?: PartyPresence; onClick: () => void }) {
   const pct = Math.round((c.hp / c.maxHp) * 100);
+  const activityLabel = presence?.activity === "acting" ? "Acting"
+    : presence?.activity === "speaking" ? "Speaking"
+      : presence?.activity === "asking_dm" ? "Asking DM"
+        : presence?.activity === "starting_journey" ? "Starting Journey"
+          : presence?.activity === "waiting_for_roll" ? "Roll Needed"
+            : presence?.activity === "resolving_roll" ? "Rolling"
+              : presence?.activity === "following" ? "Following"
+                : "Ready";
+  const status = !presence?.online
+    ? presence?.activity === "waiting_for_roll" ? `Offline · Roll Needed${presence.detail ? ` · ${presence.detail}` : ""}` : "Offline"
+    : presence.activity === "following" && presence.detail
+      ? presence.detail
+      : `${activityLabel}${presence.detail ? ` · ${presence.detail}` : ""}`;
+  const dotClass = !presence?.online ? "bg-stone-600"
+    : presence.activity === "ready" ? "bg-emerald-400"
+      : "bg-amber-400 animate-pulse";
   return (
-    <button onClick={onClick} title="View Character Sheet"
-      className={`text-left flex items-center gap-2.5 rounded-xl pl-1.5 pr-3 py-1.5 bg-black/55 backdrop-blur-sm border transition hover:border-amber-500/60 ${me ? "border-amber-600/50" : "border-stone-700/50"} min-w-44`}>
+    <button onClick={onClick} title={`${status} · View Character Sheet`}
+      className={`text-left flex max-w-full min-w-44 items-center gap-2.5 rounded-xl border bg-black/60 py-1.5 pl-1.5 pr-3 backdrop-blur-sm transition hover:border-amber-500/60 sm:min-w-52 ${me ? "border-amber-600/50" : "border-stone-700/50"}`}>
       <Avatar c={c} className="w-10 h-10 rounded-lg" />
-      <div className="flex-1">
-        <div className="text-sm leading-tight">{c.name} <span className="text-stone-400 text-xs">{c.className} {c.level}</span></div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 text-sm leading-tight"><span className={`h-2 w-2 shrink-0 rounded-full ${dotClass}`} /><span className="truncate">{c.name}</span> <span className="shrink-0 text-xs text-stone-400">{c.className} {c.level}</span></div>
         <div className="h-1.5 mt-1 rounded bg-stone-800 overflow-hidden">
           <div className={`h-full ${pct > 50 ? "bg-emerald-500" : pct > 25 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${pct}%` }} />
         </div>
         <div className="text-[10px] text-stone-400 mt-0.5">{c.hp}/{c.maxHp} HP · AC {c.ac}</div>
+        <div className={`mt-0.5 truncate text-[10px] ${presence?.online ? "text-amber-200/75" : "text-stone-600"}`}>{status}</div>
       </div>
     </button>
   );

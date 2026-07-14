@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ClientMessage, ServerMessage } from "@grimoire/shared";
+import type { ClientMessage, PartyPresence, ServerMessage } from "@grimoire/shared";
 import type { WebSocket } from "ws";
 
 vi.mock("./db.js", () => ({
@@ -26,7 +26,7 @@ vi.mock("./media.js", () => ({
 import { castNpcVoice, GameRoom } from "./game.js";
 import { decideMove } from "./dm.js";
 import { getNpcPortrait } from "./media.js";
-import { loadCampaign } from "./db.js";
+import { loadCampaign, loadSlot } from "./db.js";
 
 class FakeSocket {
   readonly OPEN = 1;
@@ -48,6 +48,9 @@ const latestState = (socket: FakeSocket) => {
   return states.at(-1)?.state;
 };
 
+const latestPresence = (socket: FakeSocket): PartyPresence[] =>
+  socket.messages.filter((message): message is Extract<ServerMessage, { type: "party_presence" }> => message.type === "party_presence").at(-1)?.members ?? [];
+
 describe("shared-room multiplayer foundation", () => {
   const rooms: GameRoom[] = [];
   afterEach(() => {
@@ -56,6 +59,7 @@ describe("shared-room multiplayer foundation", () => {
     vi.mocked(decideMove).mockReset();
     vi.mocked(getNpcPortrait).mockReturnValue({ cached: null, pending: null });
     vi.mocked(loadCampaign).mockReset().mockReturnValue(null);
+    vi.mocked(loadSlot).mockReset().mockReturnValue(null);
   });
 
   it("broadcasts one authoritative party snapshot to two isolated clients", async () => {
@@ -72,6 +76,146 @@ describe("shared-room multiplayer foundation", () => {
     expect(room.clientCount).toBe(2);
     expect(latestState(alice)?.party.map(hero => hero.name)).toEqual(["Alice", "Borin"]);
     expect(latestState(borin)?.party.map(hero => hero.name)).toEqual(["Alice", "Borin"]);
+    expect(latestPresence(alice).map(member => [member.playerName, member.online, member.activity])).toEqual([
+      ["Alice", true, "ready"], ["Borin", true, "ready"],
+    ]);
+  });
+
+  it("keeps the roster visible and marks a hero offline after their last tab leaves", async () => {
+    const room = new GameRoom();
+    rooms.push(room);
+    const alice = new FakeSocket();
+    const borin = new FakeSocket();
+    room.addClient(alice as unknown as WebSocket);
+    room.addClient(borin as unknown as WebSocket);
+    await room.handle(alice as unknown as WebSocket, joinMessage("Alice"));
+    await room.handle(borin as unknown as WebSocket, joinMessage("Borin"));
+    const stableLogLength = room.state.log.length;
+
+    room.removeClient(borin as unknown as WebSocket);
+
+    expect(latestPresence(alice).find(member => member.playerName === "Borin")).toMatchObject({ online: false, activity: "ready" });
+    expect(latestState(alice)?.party.map(hero => hero.name)).toContain("Borin");
+    expect(room.state.log).toHaveLength(stableLogLength);
+
+    const borinReturn = new FakeSocket();
+    room.addClient(borinReturn as unknown as WebSocket);
+    await room.handle(borinReturn as unknown as WebSocket, joinMessage("Borin"));
+    expect(latestPresence(alice).find(member => member.playerName === "Borin")?.online).toBe(true);
+    expect(room.state.log).toHaveLength(stableLogLength);
+  });
+
+  it("does not mark a hero offline while another tab is still attached", async () => {
+    const room = new GameRoom();
+    rooms.push(room);
+    const alice = new FakeSocket();
+    const borinOne = new FakeSocket();
+    const borinTwo = new FakeSocket();
+    room.addClient(alice as unknown as WebSocket);
+    room.addClient(borinOne as unknown as WebSocket);
+    room.addClient(borinTwo as unknown as WebSocket);
+    await room.handle(alice as unknown as WebSocket, joinMessage("Alice"));
+    await room.handle(borinOne as unknown as WebSocket, joinMessage("Borin"));
+    await room.handle(borinTwo as unknown as WebSocket, joinMessage("Borin"));
+
+    room.removeClient(borinOne as unknown as WebSocket);
+
+    expect(latestPresence(alice).find(member => member.playerName === "Borin")?.online).toBe(true);
+    expect(latestState(alice)?.log).toHaveLength(2);
+  });
+
+  it("broadcasts the active hero and followers while a shared action resolves", async () => {
+    let resolveMove!: (move: Awaited<ReturnType<typeof decideMove>>) => void;
+    vi.mocked(decideMove).mockImplementation(() => new Promise(resolve => { resolveMove = resolve; }));
+    const room = new GameRoom();
+    rooms.push(room);
+    const alice = new FakeSocket();
+    const borin = new FakeSocket();
+    room.addClient(alice as unknown as WebSocket);
+    room.addClient(borin as unknown as WebSocket);
+    await room.handle(alice as unknown as WebSocket, joinMessage("Alice"));
+    await room.handle(borin as unknown as WebSocket, joinMessage("Borin"));
+    room.state.scene.kind = "forest";
+
+    const turn = room.handle(alice as unknown as WebSocket, { type: "action", mode: "act", text: "Search the ruined shrine" });
+    await vi.waitFor(() => expect(latestPresence(borin).find(member => member.playerName === "Alice")?.activity).toBe("acting"));
+    expect(latestPresence(borin).find(member => member.playerName === "Alice")?.detail).toBe("Search the ruined shrine");
+    expect(latestPresence(borin).find(member => member.playerName === "Borin")).toMatchObject({ activity: "following", detail: "Following Alice" });
+
+    resolveMove({ move: "narrate", suggestedActions: [] });
+    await turn;
+
+    expect(latestPresence(borin).map(member => member.activity)).toEqual(["ready", "ready"]);
+  });
+
+  it("acknowledges a loaded journey and clears stale socket identities", async () => {
+    const room = new GameRoom();
+    rooms.push(room);
+    const alice = new FakeSocket();
+    const borin = new FakeSocket();
+    room.addClient(alice as unknown as WebSocket);
+    room.addClient(borin as unknown as WebSocket);
+    await room.handle(alice as unknown as WebSocket, joinMessage("Alice"));
+    await room.handle(borin as unknown as WebSocket, joinMessage("Borin"));
+    const loadedState = structuredClone(room.state);
+    loadedState.party = loadedState.party.filter(hero => hero.name === "Alice");
+    vi.mocked(loadSlot).mockReturnValue({ state: loadedState, history: [] });
+
+    await room.handle(borin as unknown as WebSocket, { type: "load_slot", id: 7 });
+
+    expect(borin.messages).toContainEqual({ type: "journey_ready", action: "load", saveId: 7 });
+    expect(latestPresence(alice).map(member => member.playerName)).toEqual(["Alice"]);
+    await room.handle(borin as unknown as WebSocket, { type: "action", mode: "act", text: "Keep acting as Borin" });
+    expect(borin.messages.at(-1)).toEqual({ type: "error", message: "Join the game first." });
+  });
+
+  it("lets the pre-character chooser load a save while the table is pristine", async () => {
+    const room = new GameRoom();
+    rooms.push(room);
+    const chooser = new FakeSocket();
+    room.addClient(chooser as unknown as WebSocket);
+    const savedState = structuredClone(room.state);
+    savedState.campaignName = "The Saved Road";
+    vi.mocked(loadSlot).mockReturnValue({ state: savedState, history: [] });
+
+    await room.handle(chooser as unknown as WebSocket, { type: "load_slot", id: 9 });
+
+    expect(latestState(chooser)?.campaignName).toBe("The Saved Road");
+    expect(chooser.messages.at(-1)).toEqual({ type: "journey_ready", action: "load", saveId: 9 });
+  });
+
+  it("acknowledges a new journey only after the shared table is reset", async () => {
+    const room = new GameRoom();
+    rooms.push(room);
+    const alice = new FakeSocket();
+    room.addClient(alice as unknown as WebSocket);
+    await room.handle(alice as unknown as WebSocket, joinMessage("Alice"));
+
+    await room.handle(alice as unknown as WebSocket, { type: "new_game" });
+
+    expect(latestState(alice)).toMatchObject({ party: [], scene: { kind: "fireside" } });
+    expect(latestPresence(alice)).toEqual([]);
+    expect(alice.messages.at(-1)).toEqual({ type: "journey_ready", action: "new" });
+  });
+
+  it("does not let an unjoined newcomer replace an active shared table", async () => {
+    const room = new GameRoom();
+    rooms.push(room);
+    const alice = new FakeSocket();
+    const newcomer = new FakeSocket();
+    room.addClient(alice as unknown as WebSocket);
+    await room.handle(alice as unknown as WebSocket, joinMessage("Alice"));
+    room.addClient(newcomer as unknown as WebSocket);
+
+    await room.handle(newcomer as unknown as WebSocket, { type: "load_slot", id: 4 });
+    expect(newcomer.messages.at(-1)).toEqual({
+      type: "error", message: "Join the current party before replacing its shared journey.",
+    });
+    await room.handle(newcomer as unknown as WebSocket, { type: "new_game" });
+    expect(newcomer.messages.at(-1)).toEqual({
+      type: "error", message: "Join the current party before replacing its shared journey.",
+    });
+    expect(room.state.party.map(hero => hero.name)).toEqual(["Alice"]);
   });
 
   it("lets only the named player resolve a shared pending check", async () => {
