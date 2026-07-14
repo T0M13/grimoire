@@ -199,7 +199,12 @@ These behaviors were tuned after real play sessions and must be preserved:
   ("MOVEMENT IS SACRED"), and `dm-system.md` forbids lingering on decided moments. A location is
   worth 2-3 beats of description at most.
 - **Beats are short.** 1-3 sentences, single-sentence beats encouraged, `num_predict: 180` caps the
-  hard ceiling. Language stays simple; no purple prose.
+  hard ceiling. Language stays simple; no purple prose. Written for players who may not speak
+  English natively; plain text only (the sanitizer also strips markdown symbols defensively).
+- **Quest text is beginner-simple.** Title = 2-4 everyday words; objective = one sentence starting
+  with a verb that says exactly what to do; summary = one plain sentence of why. Enforced in the
+  move-instruction prompt and mirrored by the hardcoded opening-quest fallback ("The First Clue").
+  Abstract phrasing like "investigate the immediate hook" is explicitly banned.
 - **Rolls are the heartbeat.** The move-selection prompt biases toward `request_check` for any
   real attempt (including crossing thresholds like portals); check outcomes are allowed to bend
   the story. Only conversation, obvious facts, automatic tasks, and impossible attempts skip rolls.

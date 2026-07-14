@@ -497,9 +497,9 @@ natural spoken sentences, no headings, narration, stage directions, quotation ma
       );
       this.applyQuestUpdate(move.quest ?? {
         action: "start",
-        title: "Follow The First Lead",
-        objective: `Investigate the immediate hook at ${this.state.scene.name}.`,
-        summary: "The opening event points toward a larger problem that needs an adventurer.",
+        title: "The First Clue",
+        objective: `Look around ${this.state.scene.name} and find out what happened here.`,
+        summary: "Something strange happened here. Follow what you find.",
         isMain: true,
       });
       const narration = await this.narrateAndSpeak(

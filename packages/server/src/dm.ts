@@ -94,9 +94,14 @@ function safePrefix(text: string): string {
   return text.slice(0, marker).replace(/[\s*_#>`-]+$/u, "").trimEnd();
 }
 
+/** Markdown symbols read as noise in the story band and would be spoken by TTS. */
+function stripMarkdownSymbols(text: string): string {
+  return text.replace(/[*_#`]/g, "");
+}
+
 /** Remove a leaked private scene/portrait label from persisted or completed narration. */
 export function sanitizePlayerFacingText(text: string): string {
-  return safePrefix(text);
+  return stripMarkdownSymbols(safePrefix(text));
 }
 
 /**
@@ -142,8 +147,9 @@ export class PlayerFacingTextStream {
 
   private publish(text: string): void {
     if (!text) return;
-    this.complete += text;
-    this.emit(text);
+    const clean = stripMarkdownSymbols(text);
+    this.complete += clean;
+    if (clean) this.emit(clean);
   }
 }
 
@@ -194,6 +200,12 @@ established NPC fact from state; never casually redesign a known subject.
 Use optional "quest" only for a real objective transition: start a main/side quest, advance its
 current objective, complete it, or fail it. Preserve the main quest through setbacks; failure in a
 check should create a cost, complication, or alternate route rather than strand the story.
+Quest text must be SIMPLE enough for a child or a non-native English speaker:
+- "title": 2-4 everyday words ("The Missing Girl", "Rats in the Cellar").
+- "objective": ONE short sentence that tells the players exactly what to DO next, starting with
+  a verb ("Find out who broke into the stall.", "Talk to the captain at the docks.").
+- "summary": ONE short plain sentence about why it matters ("A thief is stealing from the market.").
+Never use abstract words like "hook", "lead", "immediate", "investigate the situation".
 Set optional "mood" when the scene's emotional state changes. Use "combat" when a fight
 starts, "boss" for a climactic enemy, "victory" when a major encounter ends, and return to the
 best fitting ambient mood after danger passes. Omit it when the mood has not changed.
