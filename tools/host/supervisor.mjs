@@ -14,17 +14,35 @@ const python = isWindows
   : path.join(root, "vendor", "ComfyUI", "venv", "bin", "python");
 const token = randomUUID().replaceAll("-", "");
 const bindHost = process.env.GRIMOIRE_BIND_HOST ?? "0.0.0.0";
-const gamePort = Number(process.env.GRIMOIRE_GAME_PORT ?? "8786");
+const gamePort = Number(process.env.GRIMOIRE_GAME_PORT ?? "8787");
+const webPort = Number(process.env.GRIMOIRE_WEB_PORT ?? "8786");
 const ttsPort = Number(process.env.GRIMOIRE_TTS_PORT ?? "8765");
 const managed = [];
+const probeHost = bindHost === "0.0.0.0"
+  ? "127.0.0.1"
+  : bindHost === "::"
+    ? "[::1]"
+    : bindHost.includes(":") ? `[${bindHost}]` : bindHost;
+const gameOrigin = `http://${probeHost}:${gamePort}`;
+const webOrigin = `http://${probeHost}:${webPort}`;
+
+for (const [name, port] of [["web", webPort], ["game", gamePort], ["narrator", ttsPort]]) {
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+    throw new Error(`Invalid Grimoire ${name} port: ${port}`);
+  }
+}
+if (new Set([webPort, gamePort, ttsPort]).size !== 3) {
+  throw new Error("GRIMOIRE_WEB_PORT, GRIMOIRE_GAME_PORT, and GRIMOIRE_TTS_PORT must differ");
+}
 
 fs.mkdirSync(logDir, { recursive: true });
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
-async function healthy(url, timeoutMs = 2_000) {
+async function healthy(url, timeoutMs = 2_000, expectedText) {
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
-    return response.ok;
+    if (!response.ok) return false;
+    return expectedText ? (await response.text()).includes(expectedText) : true;
   } catch {
     return false;
   }
@@ -36,12 +54,13 @@ function saveState() {
     startedAt: new Date().toISOString(),
     shutdownToken: token,
     gamePort,
+    webPort,
     processes: managed.map(({ name, processId }) => ({ name, processId })),
   }, null, 2)}\n`);
 }
 
-async function startManaged(name, healthUrl, command, args) {
-  if (await healthy(healthUrl)) {
+async function startManaged(name, healthUrl, command, args, expectedText) {
+  if (await healthy(healthUrl, 2_000, expectedText)) {
     console.log(`[KEEP]  ${name} was already running outside Grimoire`);
     return;
   }
@@ -55,6 +74,7 @@ async function startManaged(name, healthUrl, command, args) {
       GRIMOIRE_SHUTDOWN_TOKEN: token,
       GRIMOIRE_IDLE_SHUTDOWN_MS: process.env.GRIMOIRE_IDLE_SHUTDOWN_MS ?? "15000",
       GRIMOIRE_GAME_PORT: String(gamePort),
+      GRIMOIRE_WEB_PORT: String(webPort),
       GRIMOIRE_TTS_PORT: String(ttsPort),
       VITE_GAME_PORT: String(gamePort),
     },
@@ -70,9 +90,9 @@ async function startManaged(name, healthUrl, command, args) {
   console.log(`[BOOT]  ${name} (PID ${child.pid})`);
 }
 
-async function waitFor(name, url, seconds, required = false) {
+async function waitFor(name, url, seconds, required = false, expectedText) {
   for (let attempt = 0; attempt < seconds; attempt += 1) {
-    if (await healthy(url)) return true;
+    if (await healthy(url, 2_000, expectedText)) return true;
     await sleep(1_000);
   }
   const message = `${name} did not become ready`;
@@ -132,20 +152,20 @@ async function main() {
   ]);
   await waitFor("Narrator", `http://127.0.0.1:${ttsPort}/health`, 60);
 
-  await startManaged("Game server", `http://127.0.0.1:${gamePort}/health`, process.execPath, [
+  await startManaged("Game server", `${gameOrigin}/health`, process.execPath, [
     path.join(root, "node_modules", "tsx", "dist", "cli.mjs"),
     path.join(root, "packages", "server", "src", "index.ts"),
   ]);
-  await startManaged("Web client", "http://127.0.0.1:5173", process.execPath, [
+  await startManaged("Web client", webOrigin, process.execPath, [
     path.join(root, "node_modules", "vite", "bin", "vite.js"),
-    path.join(root, "packages", "client"), "--host", bindHost,
-  ]);
+    path.join(root, "packages", "client"), "--host", bindHost, "--port", String(webPort),
+  ], "<title>Grimoire</title>");
   await Promise.all([
-    waitFor("Game server", `http://127.0.0.1:${gamePort}/health`, 120, true),
-    waitFor("Web client", "http://127.0.0.1:5173", 120, true),
+    waitFor("Game server", `${gameOrigin}/health`, 120, true),
+    waitFor("Web client", webOrigin, 120, true, "<title>Grimoire</title>"),
   ]);
   console.log("[READY] Grimoire is running in the background");
-  while (await healthy(`http://127.0.0.1:${gamePort}/health`)) await sleep(2_000);
+  while (await healthy(`${gameOrigin}/health`)) await sleep(2_000);
 }
 
 for (const signal of ["SIGINT", "SIGTERM"]) {

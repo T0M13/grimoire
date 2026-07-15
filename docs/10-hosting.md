@@ -53,14 +53,15 @@ with systemd.
 
 ## Network & security
 
-- The web UI listens on `0.0.0.0:5173`; the game API/WebSocket on `0.0.0.0:8786`.
+- The web UI listens on `0.0.0.0:8786`; the game API/WebSocket on `0.0.0.0:8787`.
   Ollama, ComfyUI, and Kokoro stay on loopback.
-- **No login screen or built-in TLS.** Do not expose 5173/8786 to the public internet.
+- **No login screen or built-in TLS.** Do not expose 8786/8787 to the public internet.
   Use a trusted LAN, Tailscale/WireGuard, or an authenticated HTTPS reverse proxy.
 - Behind TLS with a separate game endpoint: `VITE_GAME_ORIGIN=https://game.example.com` before
   starting Vite; the client switches to HTTPS assets and secure WebSockets.
 - `GRIMOIRE_BIND_HOST` restricts the two public listeners to one interface.
-- `GRIMOIRE_GAME_PORT` / `GRIMOIRE_TTS_PORT` override the Grimoire-owned backend ports.
+- `GRIMOIRE_WEB_PORT`, `GRIMOIRE_GAME_PORT`, and `GRIMOIRE_TTS_PORT` override the
+  Grimoire-owned ports.
 
 ## Test multiplayer today
 
@@ -84,8 +85,8 @@ hero. Create a different hero in each context and verify:
    visible and usable; submitting from one window must still update both.
 
 For a LAN test, find the host's private IPv4 address with `ipconfig`, allow Node on Windows
-**Private** networks if prompted, and open `http://HOST-IP:5173` from the second device. Verify
-`http://HOST-IP:8786/health` there as well; both ports must be reachable. Finish with `npm stop`.
+**Private** networks if prompted, and open `http://HOST-IP:8786` from the second device. Verify
+`http://HOST-IP:8787/health` there as well; both ports must be reachable. Finish with `npm stop`.
 
 This is currently a sequential shared table, not split-party multiplayer: one scene, one global
 DM lock, public dialogue/audio, no lobby/invite code, and no authenticated host controls. Use only
@@ -98,17 +99,18 @@ Reference setup: a home server running Nginx Proxy Manager (NPM) + Pi-hole, DNS 
 game PC on the same LAN.
 
 1. **Give the game PC a fixed LAN IP** (router DHCP reservation), e.g. `192.168.0.50`.
-   Allow inbound TCP 5173 and 8786 from the LAN in Windows Firewall (Node usually prompts
+   Allow inbound TCP 8786 and 8787 from the LAN in Windows Firewall (Node usually prompts
    for this on first run).
 2. **DNS**: in Cloudflare, add `grimoire` as an A record to your public IP (proxied is fine —
    WebSockets pass through), or attach it to an existing cloudflared tunnel that reaches NPM.
    Without a tunnel, forward router port 443 to the NPM server.
-3. **NPM proxy host** for `grimoire.your-domain.com` → `http://<game-pc-ip>:5173`, with
+3. **NPM proxy host** for `grimoire.your-domain.com` → `http://<game-pc-ip>:8786`, with
    **WebSockets Support ON** and a Let's Encrypt cert (DNS challenge via Cloudflare works even
    behind the proxy). Then add **Custom Locations**, each also pointing at `<game-pc-ip>` but
-   port **8786**, WebSockets ON:
-   `/ws`, `/assets`, `/health`, `/portrait`
-   (everything else stays on 5173 — one domain, no CORS.)
+   port **8787**, WebSockets ON:
+   `/ws`, `/assets`, `/health`, `/portrait`, `/export`, `/import`
+   (everything else stays on 8786 — one domain, no CORS.) The web host also forwards
+   `/export` and `/import` to the game port as a compatibility fallback.
 4. **Start the game with its public identity:**
    ```powershell
    $env:GRIMOIRE_PUBLIC_ORIGIN = "https://grimoire.your-domain.com"

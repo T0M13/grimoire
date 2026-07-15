@@ -6,7 +6,7 @@ import { readPlayerIdentity, writePlayerIdentity } from "./playerIdentity";
 
 const GAME_ORIGIN = new URL(
   (import.meta.env.VITE_GAME_ORIGIN as string | undefined)
-    ?? `${location.protocol}//${location.hostname}:${import.meta.env.VITE_GAME_PORT ?? "8786"}`,
+    ?? `${location.protocol}//${location.hostname}:${import.meta.env.VITE_GAME_PORT ?? "8787"}`,
 );
 export const assetUrl = (path: string) => new URL(path, GAME_ORIGIN).toString();
 

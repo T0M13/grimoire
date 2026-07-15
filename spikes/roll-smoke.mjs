@@ -2,7 +2,7 @@
 // rolls when asked, and verifies the result narration arrives.
 import WebSocket from "ws";
 
-const ws = new WebSocket(`ws://127.0.0.1:${process.env.GRIMOIRE_GAME_PORT ?? "8786"}/ws`);
+const ws = new WebSocket(`ws://127.0.0.1:${process.env.GRIMOIRE_GAME_PORT ?? "8787"}/ws`);
 const ATTEMPTS = [
   "I try to silently pick the lock on the warehouse door before anyone notices me.",
   "I attempt to climb the drainpipe up to the second-floor window without being seen.",

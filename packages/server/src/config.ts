@@ -23,7 +23,7 @@ export const MUSIC_DIR = path.join(ASSET_DIR, "music");
 export const DB_PATH = path.join(VAR_DIR, "grimoire.db");
 
 export const CONFIG = {
-  port: Number(process.env.GRIMOIRE_GAME_PORT ?? "8786"),
+  port: Number(process.env.GRIMOIRE_GAME_PORT ?? "8787"),
   ollamaUrl: "http://127.0.0.1:11434",
   // priority: explicit env override > hardware tier picked by setup > full-tier default
   dmModel: process.env.GRIMOIRE_DM_MODEL ?? detectedDmModel() ?? "llama3.1:8b",
