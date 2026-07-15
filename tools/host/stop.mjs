@@ -28,7 +28,7 @@ if (!fs.existsSync(statePath)) {
   process.exit(0);
 }
 const state = JSON.parse(fs.readFileSync(statePath, "utf8").replace(/^\uFEFF/, ""));
-const gamePort = Number(state.gamePort ?? 8786);
+const gamePort = Number(state.gamePort ?? 8787);
 console.log("Stopping Grimoire...");
 try {
   await fetch(`http://127.0.0.1:${gamePort}/shutdown`, {

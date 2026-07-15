@@ -164,8 +164,9 @@ be adapted after running setup once. The application has no built-in authenticat
 remote access should be through a trusted LAN/VPN or an authenticated HTTPS reverse proxy.
 For split-origin proxy deployments, `VITE_GAME_ORIGIN=https://game.example.com` controls the
 client's HTTPS/WSS game endpoint. `GRIMOIRE_BIND_HOST` restricts the default `0.0.0.0` listeners.
-The defaults are web `5173`, game `8786`, narrator `8765`, ComfyUI `8188`, and Ollama `11434`;
-`GRIMOIRE_GAME_PORT` and `GRIMOIRE_TTS_PORT` override the two Grimoire-owned backend ports.
+The defaults are web `8786`, game `8787`, narrator `8765`, ComfyUI `8188`, and Ollama `11434`;
+`GRIMOIRE_WEB_PORT`, `GRIMOIRE_GAME_PORT`, and `GRIMOIRE_TTS_PORT` override the
+Grimoire-owned ports.
 
 Downloaded runtimes, model weights, databases, generated media, and setup markers are excluded
 from Git. They live under `vendor/` and `var/` and are reproducible or machine-local.

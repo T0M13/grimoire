@@ -84,7 +84,7 @@ again.
 ```
 
 Follow any Windows installation or firewall prompts. When startup finishes, open
-[http://localhost:5173](http://localhost:5173) in your browser.
+[http://localhost:8786](http://localhost:8786) in your browser.
 
 If Windows blocks the script, run this instead:
 
@@ -121,7 +121,7 @@ chmod +x setup.sh start.sh stop.sh
 ./start.sh
 ```
 
-Open [http://localhost:5173](http://localhost:5173) when startup finishes. See the
+Open [http://localhost:8786](http://localhost:8786) when startup finishes. See the
 [hosting guide](docs/10-hosting.md) for persistent server mode and systemd setup.
 
 ## Play with friends
@@ -134,7 +134,7 @@ host's address in a browser.
 1. Start Grimoire on the host computer.
 2. On Windows, run `ipconfig` and find the **IPv4 Address** under the active Wi-Fi or Ethernet
    connection. On Linux, run `ip a` and find the active connection's IPv4 address.
-3. Friends open that address with port `5173`, for example `http://192.168.1.25:5173`.
+3. Friends open that address with port `8786`, for example `http://192.168.1.25:8786`.
 4. They choose **Join Current Journey**, create a hero, and join the party.
 
 The host may need to allow Node.js through the firewall on private networks.
@@ -142,7 +142,7 @@ The host may need to allow Node.js through the firewall on private networks.
 ### Across the internet
 
 Use a private network such as [Tailscale](https://tailscale.com), or put Grimoire behind an
-authenticated HTTPS proxy. Do not expose ports `5173` and `8787` directly to the internet. The
+authenticated HTTPS proxy. Do not expose ports `8786` and `8787` directly to the internet. The
 [hosting guide](docs/10-hosting.md) explains the options.
 
 Grimoire does not yet have host permissions or its own sign-in screen. Anyone who can reach the

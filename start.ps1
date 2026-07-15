@@ -1,6 +1,6 @@
 # Grimoire — one-command launcher for the host.
 # Starts: Ollama (if not running) + ComfyUI + Kokoro TTS + game server + web client.
-# Play at http://localhost:5173  (friends on your LAN/Tailscale: http://<your-ip>:5173)
+# Play at http://localhost:8786  (friends on your LAN/Tailscale: http://<your-ip>:8786)
 
 param([switch]$Persistent)
 
@@ -10,7 +10,18 @@ $setup = Join-Path $root "setup.ps1"
 $supervisor = Join-Path $root "tools\host\supervisor.mjs"
 $statePath = Join-Path $root "var\grimoire-host.json"
 $logDir = Join-Path $root "var\logs"
-$gamePort = if ($env:GRIMOIRE_GAME_PORT) { [int]$env:GRIMOIRE_GAME_PORT } else { 8786 }
+$gamePort = if ($env:GRIMOIRE_GAME_PORT) { [int]$env:GRIMOIRE_GAME_PORT } else { 8787 }
+$webPort = if ($env:GRIMOIRE_WEB_PORT) { [int]$env:GRIMOIRE_WEB_PORT } else { 8786 }
+$bindHost = if ($env:GRIMOIRE_BIND_HOST) { $env:GRIMOIRE_BIND_HOST } else { "0.0.0.0" }
+$probeHost = if ($bindHost -eq "0.0.0.0") {
+  "127.0.0.1"
+} elseif ($bindHost -eq "::") {
+  "[::1]"
+} elseif ($bindHost.Contains(':')) {
+  "[$bindHost]"
+} else {
+  $bindHost
+}
 
 # Existing terminals do not notice environment variables saved at User scope after they opened.
 # Refresh the public origin here so `npm start` works immediately without storing host/domain
@@ -22,15 +33,19 @@ if (-not $env:GRIMOIRE_PUBLIC_ORIGIN) {
 $playUrl = if ($env:GRIMOIRE_PUBLIC_ORIGIN) {
   $env:GRIMOIRE_PUBLIC_ORIGIN.TrimEnd('/')
 } else {
-  "http://localhost:5173"
+  "http://localhost:$webPort"
 }
 
 if (Test-Path $statePath) {
   try {
     $state = Get-Content -Raw $statePath | ConvertFrom-Json
     if (Get-Process -Id $state.supervisorPid -ErrorAction SilentlyContinue) {
+      $runningPlayUrl = $playUrl
+      if (-not $env:GRIMOIRE_PUBLIC_ORIGIN -and $state.webPort) {
+        $runningPlayUrl = "http://localhost:$($state.webPort)"
+      }
       Write-Host "Grimoire is already running in the background." -ForegroundColor Green
-      Write-Host "Play at $playUrl" -ForegroundColor Cyan
+      Write-Host "Play at $runningPlayUrl" -ForegroundColor Cyan
       exit 0
     }
   } catch { }
@@ -70,8 +85,11 @@ try {
 $ready = $false
 for ($i = 0; $i -lt 120 -and -not $ready; $i++) {
   try {
-    Invoke-RestMethod -Uri "http://127.0.0.1:$gamePort/health" -TimeoutSec 2 | Out-Null
-    Invoke-RestMethod -Uri "http://127.0.0.1:5173" -TimeoutSec 2 | Out-Null
+    Invoke-RestMethod -Uri "http://${probeHost}:$gamePort/health" -TimeoutSec 2 | Out-Null
+    $webResponse = Invoke-WebRequest -UseBasicParsing -Uri "http://${probeHost}:$webPort" -TimeoutSec 2
+    if ($webResponse.Content -notlike '*<title>Grimoire</title>*') {
+      throw "Port $webPort is responding, but it is not the Grimoire web client."
+    }
     $ready = $true
   } catch {
     if ($hostProcess.HasExited) { break }

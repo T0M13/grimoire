@@ -15,7 +15,7 @@ With a host running (`.\start.ps1` / `./start.sh`):
 ```
 npm run demo               # a bot joins, starts a campaign, and plays for 2 minutes
 node tools/api/autoplay.mjs --minutes 5 --name Botrick
-node tools/api/autoplay.mjs --url ws://<host-ip>:8786/ws   # against a remote host
+node tools/api/autoplay.mjs --url ws://<host-ip>:8787/ws   # against a remote host
 ```
 
 The bot prints every DM beat, dice roll, and scene-art URL, then a summary. Exit code 0 means
@@ -25,11 +25,11 @@ a healthy host.
 
 | What | Where |
 |---|---|
-| Game (WebSocket) | `ws://<host>:8786/ws` |
-| Health check | `GET http://<host>:8786/health` |
-| Custom portrait | `POST http://<host>:8786/portrait` (`PortraitRequestSchema` body) |
-| Generated media | `GET http://<host>:8786/assets/...` (URLs arrive in messages) |
-| Web client | `http://<host>:5173` |
+| Game (WebSocket) | `ws://<host>:8787/ws` |
+| Health check | `GET http://<host>:8787/health` |
+| Custom portrait | `POST http://<host>:8787/portrait` (`PortraitRequestSchema` body) |
+| Generated media | `GET http://<host>:8787/assets/...` (URLs arrive in messages) |
+| Web client | `http://<host>:8786` |
 
 ## Client → server messages (JSON over the socket)
 
@@ -62,7 +62,7 @@ a healthy host.
 - You send **intents**, never state. The server owns all mechanics.
 - Wait for `state.dmBusy === false` before acting; respect `pendingCheck` turn order.
 - Everything is Zod-validated server-side; malformed messages get an `error`.
-- Media URLs are relative — resolve them against `http://<host>:8786`.
+- Media URLs are relative — resolve them against `http://<host>:8787`.
 
 ## Current multiplayer and trust boundary
 

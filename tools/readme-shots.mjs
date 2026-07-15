@@ -11,8 +11,8 @@ import WebSocket from "ws";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = path.join(ROOT, "docs", "media");
-const APP = "http://127.0.0.1:5173";
-const WS_URL = `ws://127.0.0.1:${process.env.GRIMOIRE_GAME_PORT ?? "8786"}/ws`;
+const APP = `http://127.0.0.1:${process.env.GRIMOIRE_WEB_PORT ?? "8786"}`;
+const WS_URL = `ws://127.0.0.1:${process.env.GRIMOIRE_GAME_PORT ?? "8787"}/ws`;
 const EDGE = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
 
 const HERO = {
