@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GAME_PORT="${GRIMOIRE_GAME_PORT:-8787}"
+GAME_PORT="${GRIMOIRE_GAME_PORT:-8786}"
 FOREGROUND=0 PERSISTENT=0 SKIP_SETUP=0
 for argument in "$@"; do
   case "$argument" in

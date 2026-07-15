@@ -10,7 +10,7 @@ $setup = Join-Path $root "setup.ps1"
 $supervisor = Join-Path $root "tools\host\supervisor.mjs"
 $statePath = Join-Path $root "var\grimoire-host.json"
 $logDir = Join-Path $root "var\logs"
-$gamePort = if ($env:GRIMOIRE_GAME_PORT) { [int]$env:GRIMOIRE_GAME_PORT } else { 8787 }
+$gamePort = if ($env:GRIMOIRE_GAME_PORT) { [int]$env:GRIMOIRE_GAME_PORT } else { 8786 }
 
 # Existing terminals do not notice environment variables saved at User scope after they opened.
 # Refresh the public origin here so `npm start` works immediately without storing host/domain

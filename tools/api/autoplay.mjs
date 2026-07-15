@@ -4,7 +4,7 @@
 //
 //   node tools/api/autoplay.mjs                 # play 2 minutes on localhost
 //   node tools/api/autoplay.mjs --minutes 5
-//   node tools/api/autoplay.mjs --url ws://192.168.1.20:8787/ws --name Botrick
+//   node tools/api/autoplay.mjs --url ws://192.168.1.20:8786/ws --name Botrick
 //
 // The bot speaks the same protocol as the browser client (packages/shared/src/index.ts):
 // join -> new_campaign -> action/roll loop. It never needs the web UI.
@@ -16,7 +16,7 @@ const arg = (name, fallback) => {
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
 const MINUTES = Number(arg("minutes", "2"));
-const URL = arg("url", `ws://127.0.0.1:${process.env.GRIMOIRE_GAME_PORT ?? "8787"}/ws`);
+const URL = arg("url", `ws://127.0.0.1:${process.env.GRIMOIRE_GAME_PORT ?? "8786"}/ws`);
 const NAME = arg("name", `Wanderer${Math.floor(Math.random() * 900 + 100)}`);
 const CLASSES = ["fighter", "rogue", "cleric", "wizard"];
 

@@ -85,9 +85,9 @@ the Dungeon Master is a locally hosted AI. Read `docs/` before large changes:
 - Host lifecycle: services are backgrounded and supervised; `.\stop.ps1` or `./stop.sh` stops
   immediately. Desktop mode cleans up after the final browser disconnect; Linux
   `./start.sh --persistent` (or Windows `.\start.ps1 -Persistent`) stays available as a server.
-- Linux systemd: adapt `deploy/grimoire.service` after setup. Only ports 5173/8787 are remotely
+- Linux systemd: adapt `deploy/grimoire.service` after setup. Only ports 5173/8786 are remotely
   bound; keep model sidecars private and use LAN/VPN or authenticated TLS proxy access.
-- `npm run dev:server` (:8787) · `npm run dev:client` (Vite :5173, `--host` for LAN)
+- `npm run dev:server` (:8786) · `npm run dev:client` (Vite :5173, `--host` for LAN)
 - Sidecars: `powershell spikes/run-comfy.ps1` · `vendor\ComfyUI\venv\Scripts\python.exe tools\tts-sidecar\server.py`
 - E2E: `node spikes/e2e-smoke.mjs` (drives join → campaign → action → roll over ws)
 - Visual media smoke: `npm run smoke:visual` paints one sanitized environment, one person, and one

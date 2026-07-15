@@ -14,7 +14,7 @@ const python = isWindows
   : path.join(root, "vendor", "ComfyUI", "venv", "bin", "python");
 const token = randomUUID().replaceAll("-", "");
 const bindHost = process.env.GRIMOIRE_BIND_HOST ?? "0.0.0.0";
-const gamePort = Number(process.env.GRIMOIRE_GAME_PORT ?? "8787");
+const gamePort = Number(process.env.GRIMOIRE_GAME_PORT ?? "8786");
 const ttsPort = Number(process.env.GRIMOIRE_TTS_PORT ?? "8765");
 const managed = [];
 
